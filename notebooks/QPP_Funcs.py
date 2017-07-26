@@ -33,11 +33,11 @@ def CTS(t, params):
     lam = np.exp(np.sqrt(2*(params[1]/params[2])))
     return params[0] * lam * np.exp((-params[1]/t)-(t/params[2]))
 
-def simulate(N, params, model, yerrsize=20000, bounds=(0,2000)):
-    x = (np.random.rand(N) *(bounds[1]-bounds[0])) + bounds[0]
-    y = model(x, params)
-    yerr = (np.random.rand(N) * 2 * yerrsize) - yerrsize
-    y += yerr
+def simulate(N, params, model, a=1, c=1, yerrsize=10000, bounds=(0,2000)):
+    x = np.sort((bounds[1] * np.random.rand(N))+bounds[0])
+    kernel = a*np.exp(-1. * c *(np.abs(x[:, None] - x[None, :])))
+    kernel[np.diag_indices(N)] += yerrsize**2 
+    y = np.abs(np.random.multivariate_normal(model(x, params), kernel))
     return x, y
 
 class PWModel(Model):
@@ -148,5 +148,4 @@ class CTSModel(Model):
         dtau1 = ((1/(self.tau2 * np.log(lam))) - (1/t)) * self.get_value(t)
         dtau2 = ((t/(self.tau2**2)) - (self.tau1/((self.tau2**2) * np.log(lam)))) * self.get_value(t)
         return np.array([dA, dtau1, dtau2])
-
 
