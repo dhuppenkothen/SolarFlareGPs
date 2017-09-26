@@ -2,6 +2,7 @@ import numpy as np
 import scipy as sp
 import matplotlib.pyplot as plt
 import celerite as ce
+import emcee as mc
 from celerite.modeling import Model
 from scipy.optimize import minimize, curve_fit
 
@@ -37,18 +38,21 @@ class CTSModel_prior(Model):
             probtau2 = 0.
         return np.log(probA * probtau1 * probtau2 * np.e)
 
-class RealTerm_Prior(ce.terms.RealTerm):
-    name = "RealTerm_Prior"
+class SHOTerm_Prior(ce.terms.SHOTerm):
+    name = "SHOTerm_Prior"
     def log_prior(self):
-        prob_a = 1.
-        prob_c = 1.
+        prob_S0 = 1.
+        prob_Q = 1.
+        prob_omega0 = 1.
         
         #again, using simple (naive) tophat distributions
-        if not ((self.log_a > -1e5) and (self.log_a < np.log(1e6))):
-            prob_a = 0.
-        if not (self.log_c > np.log(1./1000) and self.log_c < np.log(100)):
-            prob_c = 0.
-        return np.log(prob_a*prob_c * np.e)
+        if not ((self.log_S0 > -10) and (self.log_S0 < 25)):
+            prob_S0 = 0.
+        if not (self.log_Q > -10 and self.log_Q < 20):
+            prob_Q = 0.
+        if not (self.log_omega0 > -10 and self.log_omega0 < 20):
+            prob_omega0 = 0.
+        return np.log(prob_S0*prob_Q*prob_omega0 * np.e)
 
 def simulate(x, yerr, model, kernel):
     #generates a covariance matrix and then data using the multivariate normal distribution
@@ -74,8 +78,9 @@ def initguess (x, y):
     return A, t1, t2
 
 def optimize_gp(gp, y):
-    print("Initial log-likelihood: {0}".format(gp.log_likelihood(ysim)))
+    print("Initial log-likelihood: {0}".format(gp.log_likelihood(y)))
     bounds = gp.get_parameter_bounds()
+    initial_params = gp.get_parameter_vector()
     soln = minimize(neg_log_like, initial_params, jac=grad_neg_log_like, method="L-BFGS-B", bounds=bounds, args=(y, gp))
     print("Final log-likelihood: {0}".format(-soln.fun))
     print ("Optimized log-parameters: " + str(soln.x))
@@ -100,48 +105,60 @@ def log_probability(params, y, gp):
     return result
 
 def sample_gp(paramstart, y, gp, nwalkers = 100, nsteps = 1500):
-    start = [samplepdf(paramstartq,1e-10) for i in range(nwalkers)]
+    start = [samplepdf(paramstart,1e-10) for i in range(nwalkers)]
     print "Picking start..."
     for i in range(nwalkers):
         attempt = 0
-        while(log_probability(start[i], ysimq, gpq)==-np.inf):
+        while(log_probability(start[i], y, gp)==-np.inf):
             attempt += 1
-            start[i] = samplepdf(paramstartq, 1)
+            start[i] = samplepdf(paramstart, 1)
     print "Sampling..."
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args=(y, gp))
+    sampler = mc.EnsembleSampler(nwalkers, len(paramstart), log_probability, args=(y, gp))
     sampler.run_mcmc(start, nsteps)
     return sampler.chain
 
-def plot_gp(x, y, yerr, gp, model, soln=np.nan, chain=np.nan):
+def plot_chain(chain):
+    flat_samples = chain[:,200:, :].reshape((-1,6))
+    meanparams = np.mean(flat_samples, axis=0)
+    nwalkers = len(chain)
+    nsteps = len(chain[0])
+    ndim = len(chain[0][0])
+    fig, axarr = plt.subplots(ndim, sharex=True, figsize = (10,10))
+    xline = np.linspace(0,nsteps)
+    for j in range(ndim):
+        for i in range(nwalkers):
+            axarr[j].plot(np.arange(nsteps), chain[i,:,j], 'k-', alpha=1./np.log(nwalkers))
+        meanvals = meanparams[j] * np.ones(50)
+        axarr[j].plot(xline, meanvals, 'r--')
+    return fig
+
+def plot_gp(x, y, yerr, gp, model, soln=0, chain=[0]):
     init_params = gp.get_parameter_vector()
     fig = plt.figure()
-    plt.errorbar(x, y, yerr=yerr, fmt='k.', label = "Data")
-    if(np.isnan(soln)!):
+    plt.errorbar(x, y, yerr=yerr, fmt='k.', alpha = 0.05, label = "Data")
+    if not(soln == 0):
         ytest, yvar = gp.predict(y, x, return_var=True)
         ystd = np.sqrt(yvar)
         plt.plot(x, ytest, 'r--', label = "Optimized Prediction")
         plt.fill_between(x, ytest+ystd, ytest-ystd, color='r', alpha=0.3, edgecolor='none')
-        plt.plot(x, np.abs(ytestq-modelq.get_value(x)), 'g-', label = "Optimized Residual")
 
-    if(np.isnan(chain)!):
-        lamaled = False
+    if not(len(chain) == 1):
+        labeled = False
         nsteps = len(chain[0])
         nwalkers = len(chain)
         for i in range(nsteps/10):
-        params = chain[np.random.randint(nwalkers),np.random.randint(100,nsteps)]
+            params = chain[np.random.randint(nwalkers),np.random.randint(100,nsteps)]
             gp.set_parameter_vector(params)
             model.set_parameter_vector(params[3:])
             ymc, ymcvar = gp.predict(y, x, return_var=True)
             ymcstd = np.sqrt(ymcvar)
-            gpnoisemc = ymc - model.get_value(x)
             if not np.isnan(ymc).any():  
                 if labeled == False:
-                    plt.plot(x, ymc, 'g-', alpha = 0.1, label = "Posterior Predictions")
+                    plt.plot(x, ymc, 'm-', alpha = 0.1, label = "Posterior Predictions")
                     plt.fill_between(x, ymc+ymcstd, ymc-ymcstd, color='g', alpha=0.1, edgecolor='none')
-                    plt.plot(x, gpnoisemc, 'c-', label = "GP Prediction", alpha=0.1)
                     labeled = True
-                    else: 
-                        plt.plot(x, ymc, 'g-', alpha = 0.1)
-                        plt.fill_between(x, ymc+ymcstd, ymc-ymcstd, color='g', alpha=0.1, edgecolor='none'
-                        plt.plot(x, gpnoisemc, 'c-', alpha = 0.1)
+                else: 
+                    plt.plot(x, ymc, 'm-', alpha = 0.1)
+                    plt.fill_between(x, ymc+ymcstd, ymc-ymcstd, color='g', alpha=0.1, edgecolor='none')
+    plt.legend()
     return fig
