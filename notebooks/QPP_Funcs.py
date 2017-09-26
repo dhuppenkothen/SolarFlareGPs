@@ -1,151 +1,147 @@
 import numpy as np
+import scipy as sp
+import matplotlib.pyplot as plt
+import celerite as ce
 from celerite.modeling import Model
+from scipy.optimize import minimize, curve_fit
 
-def expf(t, a, b):
-    return np.exp(a*(t-b))
 
-def linef(t, x1, y1, x2, y2):
-    m = (y2-y1)/(x2-x1)
-    b = y2 - (m*x2)
-    return ((m*t)+b)
-
-def PW(t, params):
-    result = np.empty(len(t))
-    for i in range(len(t)):
-        if(t[i]<params[0]):
-            result[i] = expf(t[i], params[2], params[3])
-        elif(params[0]<=t[i] and t[i]<=params[1]):
-            result[i] = linef(t[i], params[0], expf(params[0], params[2], params[3]), params[1], expf(params[1], params[4], params[5]))
-        elif(params[1]<t[i]):
-            result[i] = expf(t[i], params[4], params[5])
-    return result
-
-def DExp(t, params):
-    result = np.empty(len(t))
-    for i in range(len(t)):
-        if(t[i]<params[0]):
-            result[i] = expf(t[i], params[1], params[2])
-        elif(params[0]<t[i]):
-            result[i] = expf(t[i], params[3], params[4])
-    return result
-
-def CTS(t, params):
-    lam = np.exp(np.sqrt(2*(params[1]/params[2])))
-    return params[0] * lam * np.exp((-params[1]/t)-(t/params[2]))
-
-def simulate(N, params, model, a=1, c=1, yerrsize=10000, bounds=(0,2000)):
-    x = np.sort((bounds[1] * np.random.rand(N))+bounds[0])
-    kernel = a*np.exp(-1. * c *(np.abs(x[:, None] - x[None, :])))
-    kernel[np.diag_indices(N)] += yerrsize**2 
-    y = np.abs(np.random.multivariate_normal(model(x, params), kernel))
-    return x, y
-
-class PWModel(Model):
-    parameter_names = ("xl", "xr", "al", "bl", "ar", "br")
+#no way of setting prior in constructor? simply redefine log_prior?
+class CTSModel_prior(Model):
+    name="CTSModel_prior"
+    parameter_names = ("log_A", "log_tau1", "log_tau2")
     
     def get_value(self, t):
-        result = np.empty(len(t))
-        for i in range(len(t)): #had to tweak this to accept t-arrays, may affect speed...
-            if(t[i]<self.xl):
-                result[i] = expf(t[i], self.al, self.bl)
-            elif(self.xl<=t[i] and t[i]<=self.xr):
-                result[i] = linef(t[i], self.xl, expf(self.xl, self.al, self.bl), self.xr, expf(self.xr, self.ar, self.br))
-            elif(self.xr<t[i]):
-                result[i] = expf(t[i], self.ar, self.br)
-        return result
+        lam = np.exp(np.sqrt(2*np.exp(self.log_tau1-self.log_tau2)))
+        return np.exp(self.log_A)*lam*np.exp((-np.exp(self.log_tau1)/t)-(t/np.exp(self.log_tau2)))
     
     #the gradient terms were manually calculated
     def compute_gradient(self, t):
-        yl = np.exp(self.al*(self.xl-self.bl))
-        yr = np.exp(self.ar*(self.xr-self.br))
-        result = np.empty([len(t), 6])
-        result2 = np.empty([6, len(t)])
-        for i in range(len(t)):
-            ylt = np.exp(self.al*(t[i]-self.bl))
-            yrt = np.exp(self.ar*(t[i]-self.br))
-            if(t[i]<self.xl):
-                dxl = 0.
-                dxr = 0.
-                dal = (t[i]-self.bl) * ylt
-                dbl = -1* self.al * ylt
-                dar = 0.
-                dbr = 0.
-                result[i] = np.array([dxl, dxr, dal, dbl, dar, dbr])
-                result2[:,i] = result[i]
-
-            elif(self.xl<=t[i] and t[i]<=self.xr):
-                term = (t[i]-self.xr)
-                dxl = ((term)/((self.xr-self.xl)**2)) * ((yr-yl) - (self.al * yl * (self.xr-self.xl)))
-                dxr = (((term)/((self.xr-self.xl)**2)) * ((self.ar * yr * (self.xr-self.xl))-(yr-yl))) - ((yr-yl)/(self.xr-self.xl)) + (self.ar * yr)
-                dal = ((term)/(self.xr-self.xl)) * (yl * (self.bl-self.xl))
-                dbl = ((term)/(self.xr-self.xl)) *(self.al * yl)
-                dar = (((term)/(self.xr-self.xl))+1) * ((self.xr-self.br)*yr)
-                dbr = (((term)/(self.xr-self.xl))+1) * (-1*(self.ar*yr))
-                result[i] = np.array([dxl, dxr, dal, dbl, dar, dbr])
-                result2[:,i] = result[i]
-        
-
-            elif(self.xr<t[i]):
-                dxl = 0.
-                dxr = 0.
-                dal = 0.
-                dbl = 0.
-                dar = (t[i]-self.br) * yrt
-                dbr = -1 * self.ar * yrt
-                result[i] = np.array([dxl, dxr, dal, dbl, dar, dbr])
-                result2[:,i] = result[i]
-
-        return result2
-
-class DExpModel(Model):
-    parameter_names = ("xc", "al", "bl", "ar", "br")
-    
-    def get_value(self, t):
-        result = np.empty(len(t))
-        for i in range(len(t)): #had to tweak this to accept t-arrays, may affect speed...
-            if(t[i]<self.xc):
-                result[i] = expf(t[i], self.al, self.bl)
-            elif(self.xc<t[i]):
-                result[i] = expf(t[i], self.ar, self.br)
-        return result
-    
-    #the gradient terms were manually calculated
-    def compute_gradient(self, t):
-        result = np.empty([len(t), 5])
-        result2 = np.empty([5, len(t)])
-        for i in range(len(t)):
-            ylt = np.exp(self.al*(t[i]-self.bl))
-            yrt = np.exp(self.ar*(t[i]-self.br))
-            
-            if(t[i]<self.xc):
-                dxc = 0
-                dal = (t[i]-self.bl) * ylt
-                dbl = -1* self.al * ylt
-                dar = 0.
-                dbr = 0.
-                result[i] = np.array([dxc, dal, dbl, dar, dbr])
-                result2[:,i] = result[i]
-
-            elif(self.xc<=t[i]):
-                dxc = 0.
-                dal = 0.
-                dbl = 0.
-                dar = (t[i]-self.br) * yrt
-                dbr = -1 * self.ar * yrt
-                result[i] = np.array([dxc, dal, dbl, dar, dbr])
-                result2[:,i] = result[i]
-        return result2
-    
-class CTSModel(Model):
-    parameter_names = ("A", "tau1", "tau2")
-    def get_value(self, t):
-        lam = np.exp(np.sqrt(2*(self.tau1/self.tau2)))
-        return self.A*lam*np.exp((-self.tau1/t)-(t/self.tau2))
-    #the gradient terms were manually calculated
-    def compute_gradient(self, t):
-        lam = np.exp(np.sqrt(2*(self.tau1/self.tau2)))
-        dA = (1./self.A) * self.get_value(t)
-        dtau1 = ((1/(self.tau2 * np.log(lam))) - (1/t)) * self.get_value(t)
-        dtau2 = ((t/(self.tau2**2)) - (self.tau1/((self.tau2**2) * np.log(lam)))) * self.get_value(t)
+        lam = np.exp(np.sqrt(2*np.exp(self.log_tau1-self.log_tau2)))
+        dA = (1./np.exp(self.log_A)) * self.get_value(t)
+        dtau1 = ((1/(np.exp(self.log_tau2) * np.log(lam))) - (1/t)) * self.get_value(t)
+        dtau2 = ((t/(np.exp(self.log_tau2)**2)) - (np.exp(self.log_tau1)/((np.exp(self.log_tau2)**2) * np.log(lam)))) * self.get_value(t)
         return np.array([dA, dtau1, dtau2])
+        
+    #defining our somewhat naive prior, a simple tophat distribution for each parameter
+    def log_prior(self):
+        probA = 1.
+        probtau1 = 1.
+        probtau2 = 1.
+        T=2000.
+        if not (self.log_A>np.log(1e4) and self.log_A<np.log(3.5e7)):
+            probA = 0.
+        if not ((self.log_tau1>np.log(1) and self.log_tau1<np.log(T))):
+            probtau1 = 0.
+        if not ((self.log_tau2>np.log(1) and self.log_tau2<np.log(T))):
+            probtau2 = 0.
+        return np.log(probA * probtau1 * probtau2 * np.e)
 
+class RealTerm_Prior(ce.terms.RealTerm):
+    name = "RealTerm_Prior"
+    def log_prior(self):
+        prob_a = 1.
+        prob_c = 1.
+        
+        #again, using simple (naive) tophat distributions
+        if not ((self.log_a > -1e5) and (self.log_a < np.log(1e6))):
+            prob_a = 0.
+        if not (self.log_c > np.log(1./1000) and self.log_c < np.log(100)):
+            prob_c = 0.
+        return np.log(prob_a*prob_c * np.e)
+
+def simulate(x, yerr, model, kernel):
+    #generates a covariance matrix and then data using the multivariate normal distribution
+    #could this be where the error is????
+    K = kernel.get_value(x[:, None] - x[None, :])
+    K[np.diag_indices(len(x))] += yerr**2
+    y = np.random.multivariate_normal(model.get_value(x), K)
+    return np.abs(y)
+
+#defining fitting functions for our GP
+def neg_log_like(params, y, gp):
+    gp.set_parameter_vector(params)
+    return -gp.log_likelihood(y)
+
+def grad_neg_log_like(params, y, gp):
+    gp.set_parameter_vector(params)
+    return -gp.grad_log_likelihood(y)[1]
+
+def initguess (x, y):
+    A = max(y)
+    t1 = max(x) * (1./3.)
+    t2 = max(x) * (2./3.)
+    return A, t1, t2
+
+def optimize_gp(gp, y):
+    print("Initial log-likelihood: {0}".format(gp.log_likelihood(ysim)))
+    bounds = gp.get_parameter_bounds()
+    soln = minimize(neg_log_like, initial_params, jac=grad_neg_log_like, method="L-BFGS-B", bounds=bounds, args=(y, gp))
+    print("Final log-likelihood: {0}".format(-soln.fun))
+    print ("Optimized log-parameters: " + str(soln.x))
+    return soln
+
+def samplepdf(params, scale=1):
+    return np.random.normal(loc=params, scale = np.sqrt(np.abs(params))*scale)
+
+def log_probability(params, y, gp):
+    gp.set_parameter_vector(params)
+    lp = gp.log_prior()
+    try:
+        ll = gp.log_likelihood(y)
+    except RuntimeError:
+        ll = np.nan
+    result = ll + lp
+    
+    if not (np.isfinite(lp)):
+        return -np.inf
+    if np.isnan(ll)==True:
+        return -np.inf
+    return result
+
+def sample_gp(paramstart, y, gp, nwalkers = 100, nsteps = 1500):
+    start = [samplepdf(paramstartq,1e-10) for i in range(nwalkers)]
+    print "Picking start..."
+    for i in range(nwalkers):
+        attempt = 0
+        while(log_probability(start[i], ysimq, gpq)==-np.inf):
+            attempt += 1
+            start[i] = samplepdf(paramstartq, 1)
+    print "Sampling..."
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, log_probability, args=(y, gp))
+    sampler.run_mcmc(start, nsteps)
+    return sampler.chain
+
+def plot_gp(x, y, yerr, gp, model, soln=np.nan, chain=np.nan):
+    init_params = gp.get_parameter_vector()
+    fig = plt.figure()
+    plt.errorbar(x, y, yerr=yerr, fmt='k.', label = "Data")
+    if(np.isnan(soln)!):
+        ytest, yvar = gp.predict(y, x, return_var=True)
+        ystd = np.sqrt(yvar)
+        plt.plot(x, ytest, 'r--', label = "Optimized Prediction")
+        plt.fill_between(x, ytest+ystd, ytest-ystd, color='r', alpha=0.3, edgecolor='none')
+        plt.plot(x, np.abs(ytestq-modelq.get_value(x)), 'g-', label = "Optimized Residual")
+
+    if(np.isnan(chain)!):
+        lamaled = False
+        nsteps = len(chain[0])
+        nwalkers = len(chain)
+        for i in range(nsteps/10):
+        params = chain[np.random.randint(nwalkers),np.random.randint(100,nsteps)]
+            gp.set_parameter_vector(params)
+            model.set_parameter_vector(params[3:])
+            ymc, ymcvar = gp.predict(y, x, return_var=True)
+            ymcstd = np.sqrt(ymcvar)
+            gpnoisemc = ymc - model.get_value(x)
+            if not np.isnan(ymc).any():  
+                if labeled == False:
+                    plt.plot(x, ymc, 'g-', alpha = 0.1, label = "Posterior Predictions")
+                    plt.fill_between(x, ymc+ymcstd, ymc-ymcstd, color='g', alpha=0.1, edgecolor='none')
+                    plt.plot(x, gpnoisemc, 'c-', label = "GP Prediction", alpha=0.1)
+                    labeled = True
+                    else: 
+                        plt.plot(x, ymc, 'g-', alpha = 0.1)
+                        plt.fill_between(x, ymc+ymcstd, ymc-ymcstd, color='g', alpha=0.1, edgecolor='none'
+                        plt.plot(x, gpnoisemc, 'c-', alpha = 0.1)
+    return fig
