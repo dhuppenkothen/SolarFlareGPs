@@ -11,7 +11,7 @@ from scipy.optimize import minimize, curve_fit
 class CTSModel_prior(Model):
     name="CTSModel_prior"
     parameter_names = ("log_A", "log_tau1", "log_tau2")
-    
+ 
     def get_value(self, t):
         lam = np.exp(np.sqrt(2*np.exp(self.log_tau1-self.log_tau2)))
         return np.exp(self.log_A)*lam*np.exp((-np.exp(self.log_tau1)/t)-(t/np.exp(self.log_tau2)))
@@ -32,9 +32,9 @@ class CTSModel_prior(Model):
         T=2000.
         if not (self.log_A>np.log(1e4) and self.log_A<np.log(3.5e7)):
             probA = 0.
-        if not ((self.log_tau1>np.log(1) and self.log_tau1<np.log(T))):
+        if not ((self.log_tau1>np.log(1) and self.log_tau1<np.log(5*T))):
             probtau1 = 0.
-        if not ((self.log_tau2>np.log(1) and self.log_tau2<np.log(T))):
+        if not ((self.log_tau2>np.log(1) and self.log_tau2<np.log(5*T))):
             probtau2 = 0.
         return np.log(probA * probtau1 * probtau2 * np.e)
 
@@ -46,7 +46,7 @@ class SHOTerm_Prior(ce.terms.SHOTerm):
         prob_omega0 = 1.
         
         #again, using simple (naive) tophat distributions
-        if not ((self.log_S0 > -10) and (self.log_S0 < 25)):
+        if not ((self.log_S0 > -10) and (self.log_S0 < 30)):
             prob_S0 = 0.
         if not (self.log_Q > -10 and self.log_Q < 20):
             prob_Q = 0.
@@ -54,13 +54,17 @@ class SHOTerm_Prior(ce.terms.SHOTerm):
             prob_omega0 = 0.
         return np.log(prob_S0*prob_Q*prob_omega0 * np.e)
 
-def simulate(x, yerr, model, kernel):
-    #generates a covariance matrix and then data using the multivariate normal distribution
-    #could this be where the error is????
+def simulate(x, model, kernel, noisy = False):
     K = kernel.get_value(x[:, None] - x[None, :])
-    K[np.diag_indices(len(x))] += yerr**2
-    y = np.random.multivariate_normal(model.get_value(x), K)
+    y = np.abs(np.random.multivariate_normal(model.get_value(x), K))
+    if (noisy==True):
+        y += np.random.poisson(y)
     return np.abs(y)
+
+#use poisson noise, with rate paremeter
+#np.random.poisson(model(t))
+#
+
 
 #defining fitting functions for our GP
 def neg_log_like(params, y, gp):
@@ -104,7 +108,8 @@ def log_probability(params, y, gp):
         return -np.inf
     return result
 
-def sample_gp(paramstart, y, gp, nwalkers = 100, nsteps = 1500):
+def sample_gp(paramstart, y, gp, nwalkers = 100, nsteps = 1500, burnin = 500):
+    '''
     start = [samplepdf(paramstart,1e-10) for i in range(nwalkers)]
     print "Picking start..."
     for i in range(nwalkers):
@@ -112,10 +117,15 @@ def sample_gp(paramstart, y, gp, nwalkers = 100, nsteps = 1500):
         while(log_probability(start[i], y, gp)==-np.inf):
             attempt += 1
             start[i] = samplepdf(paramstart, 1)
-    print "Sampling..."
+    '''
     sampler = mc.EnsembleSampler(nwalkers, len(paramstart), log_probability, args=(y, gp))
-    sampler.run_mcmc(start, nsteps)
-    return sampler.chain
+    print "Burning in..."
+    p0 = paramstart + 1e-8 * np.random.randn(nwalkers, len(paramstart))
+    p0, lp, _ = sampler.run_mcmc(p0, burnin)
+    print "Sampling..."
+    sampler.reset()
+    sampler.run_mcmc(p0, nsteps)
+    return sampler
 
 def plot_chain(chain):
     flat_samples = chain[:,200:, :].reshape((-1,6))
