@@ -3,6 +3,7 @@ import scipy as sp
 import matplotlib.pyplot as plt
 import celerite as ce
 import emcee as mc
+import corner
 from celerite.modeling import Model
 from scipy.optimize import minimize, curve_fit
 
@@ -24,36 +25,56 @@ class CTSModel_prior(Model):
         dtau2 = ((t/(np.exp(self.log_tau2)**2)) - (np.exp(self.log_tau1)/((np.exp(self.log_tau2)**2) * np.log(lam)))) * self.get_value(t)
         return np.array([dA, dtau1, dtau2])
         
+
     #defining our somewhat naive prior, a simple tophat distribution for each parameter
+
     def log_prior(self):
         probA = 1.
         probtau1 = 1.
         probtau2 = 1.
         T=2000.
-        if not (self.log_A>np.log(1e4) and self.log_A<np.log(3.5e7)):
+        if not (self.log_A>0 and self.log_A<25):
             probA = 0.
-        if not ((self.log_tau1>np.log(1) and self.log_tau1<np.log(5*T))):
+        if not ((self.log_tau1>0 and self.log_tau1<15)):
             probtau1 = 0.
-        if not ((self.log_tau2>np.log(1) and self.log_tau2<np.log(5*T))):
+        if not ((self.log_tau2>0 and self.log_tau2<15)):
             probtau2 = 0.
         return np.log(probA * probtau1 * probtau2 * np.e)
 
+
 class SHOTerm_Prior(ce.terms.SHOTerm):
     name = "SHOTerm_Prior"
+
     def log_prior(self):
         prob_S0 = 1.
         prob_Q = 1.
         prob_omega0 = 1.
         
         #again, using simple (naive) tophat distributions
-        if not ((self.log_S0 > -10) and (self.log_S0 < 30)):
+        if not ((self.log_S0 > -10) and (self.log_S0 < 50)):
             prob_S0 = 0.
-        if not (self.log_Q > -10 and self.log_Q < 20):
+        if not (self.log_Q > -20 and self.log_Q < 20):
             prob_Q = 0.
-        if not (self.log_omega0 > -10 and self.log_omega0 < 20):
+        if not (self.log_omega0 > -20 and self.log_omega0 < 20):
             prob_omega0 = 0.
         return np.log(prob_S0*prob_Q*prob_omega0 * np.e)
+    
 
+
+class RealTerm_Prior(ce.terms.RealTerm):
+    name = "RealTerm_Prior"
+    def log_prior(self):
+        prob_a = 1.
+        prob_c = 1.
+     
+        #again, using simple (naive) tophat distributions
+        if not (self.log_a > -20 and self.log_a < 10):
+            prob_a = 0.
+        if not (self.log_c > -20 and self.log_c < 10):
+            prob_c = 0.
+        return np.log(prob_a*prob_c * np.e)
+
+    
 def simulate(x, model, kernel, noisy = False):
     K = kernel.get_value(x[:, None] - x[None, :])
     y = np.abs(np.random.multivariate_normal(model.get_value(x), K))
@@ -108,16 +129,7 @@ def log_probability(params, y, gp):
         return -np.inf
     return result
 
-def sample_gp(paramstart, y, gp, nwalkers = 100, nsteps = 1500, burnin = 500):
-    '''
-    start = [samplepdf(paramstart,1e-10) for i in range(nwalkers)]
-    print "Picking start..."
-    for i in range(nwalkers):
-        attempt = 0
-        while(log_probability(start[i], y, gp)==-np.inf):
-            attempt += 1
-            start[i] = samplepdf(paramstart, 1)
-    '''
+def sample_gp(paramstart, y, gp, nwalkers = 100, nsteps = 2000, burnin = 500):
     sampler = mc.EnsembleSampler(nwalkers, len(paramstart), log_probability, args=(y, gp))
     print "Burning in..."
     p0 = paramstart + 1e-8 * np.random.randn(nwalkers, len(paramstart))
@@ -125,10 +137,11 @@ def sample_gp(paramstart, y, gp, nwalkers = 100, nsteps = 1500, burnin = 500):
     print "Sampling..."
     sampler.reset()
     sampler.run_mcmc(p0, nsteps)
+    print "Done!"
     return sampler
 
 def plot_chain(chain):
-    flat_samples = chain[:,200:, :].reshape((-1,6))
+    flat_samples = chain[:,200:, :].reshape((-1,len(chain[0,0])))
     meanparams = np.mean(flat_samples, axis=0)
     nwalkers = len(chain)
     nsteps = len(chain[0])
@@ -141,6 +154,22 @@ def plot_chain(chain):
         meanvals = meanparams[j] * np.ones(50)
         axarr[j].plot(xline, meanvals, 'r--')
     return fig
+
+def plot_corner(chain, labels = None):
+    dim = len(chain[0,0])
+    if labels==None:
+        labels = str(np.arange(dim))
+    flat_samples = chain[:,200:, :].reshape((-1,dim))
+
+    maxparams = np.empty(dim)
+    for i in range(dim):
+        hist, bin_edges = np.histogram(flat_samples[:,i], bins = 50)
+        maxindex = np.argmax(hist)
+
+        maxparams[i] = np.average([bin_edges[maxindex], bin_edges[maxindex+1]])
+
+    fig = corner.corner(flat_samples, bins=50, labels = labels, truths = maxparams,  range = np.ones(dim))
+    return fig, maxparams
 
 def plot_gp(x, y, yerr, gp, model, soln=0, chain=[0]):
     init_params = gp.get_parameter_vector()
@@ -159,7 +188,7 @@ def plot_gp(x, y, yerr, gp, model, soln=0, chain=[0]):
         for i in range(nsteps/10):
             params = chain[np.random.randint(nwalkers),np.random.randint(100,nsteps)]
             gp.set_parameter_vector(params)
-            model.set_parameter_vector(params[3:])
+            model.set_parameter_vector(params[-3:])
             ymc, ymcvar = gp.predict(y, x, return_var=True)
             ymcstd = np.sqrt(ymcvar)
             if not np.isnan(ymc).any():  
