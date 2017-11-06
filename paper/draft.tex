@@ -1,28 +1,4 @@
-%%
-%% Beginning of file 'sample61.tex'
-%%
-%% Modified 2016 September
-%%
-%% This is a sample manuscript marked up using the
-%% AASTeX v6.1 LaTeX 2e macros.
-%%
-%% AASTeX is now based on Alexey Vikhlinin's emulateapj.cls 
-%% (Copyright 2000-2015).  See the classfile for details.
-
-%% AASTeX requires revtex4-1.cls (http://publish.aps.org/revtex4/) and
-%% other external packages (latexsym, graphicx, amssymb, longtable, and epsf).
-%% All of these external packages should already be present in the modern TeX 
-%% distributions.  If not they can also be obtained at www.ctan.org.
-
-%% The first piece of markup in an AASTeX v6.x document is the \documentclass
-%% command. LaTeX will ignore any data that comes before this command. The 
-%% documentclass can take an optional argument to modify the output style.
-%% The command below calls the preprint style  which will produce a tightly 
-%% typeset, one-column, single-spaced document.  It is the default and thus
-%% does not need to be explicitly stated.
-%%
-%%
-%% using aastex version 6.1
+% using aastex version 6.1
 \documentclass{aastex61}
 
 %% The default is a single spaced, 10 point font, single spaced article.
@@ -128,7 +104,7 @@
 %%
 %% You can add a light gray and diagonal water-mark to the first page 
 %% with this command:
-% \watermark{text}
+\watermark{DRAFT}
 %% where "text", e.g. DRAFT, is the text to appear.  If the text is 
 %% long you can control the water-mark size with:
 %  \setwatermarkfontsize{dimension}
@@ -139,126 +115,88 @@
 %% This is the end of the preamble.  Indicate the beginning of the
 %% manuscript itself with \begin{document}.
 
+
 \begin{document}
 
 
-
-
-%% LaTeX will automatically break titles if they run longer than
-%% one line. However, you may use \\ to force a line break if
-%% you desire. In v6.1 you can include a footnote in the title.
-
-%% A significant change from earlier AASTEX versions is in the structure for 
-%% calling author and affilations. The change was necessary to implement 
-%% autoindexing of affilations which prior was a manual process that could 
-%% easily be tedious in large author manuscripts.
-%%
-%% The \author command is the same as before except it now takes an optional
-%% arguement which is the 16 digit ORCID. The syntax is:
-%% \author[xxxx-xxxx-xxxx-xxxx]{Author Name}
-%%
-%% This will hyperlink the author name to the author's ORCID page. Note that
-%% during compilation, LaTeX will do some limited checking of the format of
-%% the ID to make sure it is valid.
-%%
-%% Use \affiliation for affiliation information. The old \affil is now aliased
-%% to \affiliation. AASTeX v6.1 will automatically index these in the header.
-%% When a duplicate is found its index will be the same as its previous entry.
-%%
-%% Note that \altaffilmark and \altaffiltext have been removed and thus 
-%% can not be used to document secondary affiliations. If they are used latex
-%% will issue a specific error message and quit. Please use multiple 
-%% \affiliation calls for to document more than one affiliation.
-%%
-%% The new \altaffiliation can be used to indicate some secondary information
-%% such as fellowships. This command produces a non-numeric footnote that is
-%% set away from the numeric \affiliation footnotes.  NOTE that if an
-%% \altaffiliation command is used it must come BEFORE the \affiliation call,
-%% right after the \author command, in order to place the footnotes in
-%% the proper location.
-%%
-%% Use \email to set provide email addresses. Each \email will appear on its
-%% own line so you can put multiple email address in one \email call. A new
-%% \correspondingauthor command is available in V6.1 to identify the
-%% corresponding author of the manuscript. It is the author's responsibility
-%% to make sure this name is also in the author list.
-%%
-%% While authors can be grouped inside the same \author and \affiliation
-%% commands it is better to have a single author for each. This allows for
-%% one to exploit all the new benefits and should make book-keeping easier.
-%%
-%% If done correctly the peer review system will be able to
-%% automatically put the author and affiliation information from the manuscript
-%% and save the corresponding author the trouble of entering it by hand.
-
 \title{Gaussian Process Modeling: A Bayesian Approach to Detecting Quasi-Periodic Oscillations in Solar Flare Data} \label{sec:title and authors}
-\correspondingauthor{Christopher Ick}
+\correspondingauthor{Is that me?}
 \email{chris.ick@nyu.edu, david.hogg@nyu.edu, daniela.huppenkothen@nyu.edu}
 
 \author{Christopher A. Ick}
 \affil{New York University\\
 726 Broadway, Ofc 912 \\
-New York, NY, 10003, USA}
+New York, NY 10003, USA}
 
 \author{David W. Hogg}
 \affil{New York University\\
 726 Broadway, Ofc 1005 \\
-New York, NY, 10003, USA}
+New York, NY 10003, USA}
 
 \author{Daniela Huppenkothen}
-\affil{University of Washington}
+\affil{University of Washington\\
+3910 15th Ave NE\\
+Office B356B\\
+Seattle, WA 98195, USA}
 
-
-%% Note that the \and command from previous versions of AASTeX is now
-%% depreciated in this version as it is no longer necessary. AASTeX 
-%% automatically takes care of all commas and "and"s between authors names.
-
-%% AASTeX 6.1 has the new \collaboration and \nocollaboration commands to
-%% provide the collaboration status of a group of authors. These commands 
-%% can be used either before or after the list of corresponding authors. The
-%% argument for \collaboration is the collaboration identifier. Authors are
-%% encouraged to surround collaboration identifiers with ()s. The 
-%% \nocollaboration command takes no argument and exists to indicate that
-%% the nearby authors are not part of surrounding collaborations.
-
-%% Mark off the abstract in the ``abstract'' environment. 
 \begin{abstract} \label{sec:abstract} 
-Abtract goes here!
-
+	Solar flare analysis for quasi-periodic oscillations (QPOs)  was formally done using Fourier power spectra analysis, limiting computational efficiency to $\mathcal{O}(n^2)$.
+We demonstrate a more effective and efficient method of modeling solar flare data using Gaussian Processes, a continuous-domain model, which scales at $\mathcal{O}(n)$ in one-dimensional models, and provide demonstrations of these methods by applying it to both simulated and real astronomical datasets.
+Using the package Celerite for Gaussian processes, we provide demonstrations of effectively modeling QPOs using a self-correllation function (a kernel function) to simulate solar flare data, and then to remodel and capture the original characteristics of the simulated flare data, using optimization and Markov-chain Monte Carlo sampling.
+After demonstrating the effectiveness of these fitting methods, we go on to apply these modeling/fitting methods to capture the characteristics of real solar flare data, and discuss the potential use of the algorithm for automated solar flare and QPO detection.
 \end{abstract}
 
-%% Keywords should appear after the \end{abstract} command. 
-%% See the online documentation for the full list of available subject
-%% keywords and the rules for their use.
 \keywords{keywords go here}
 
-%% From the front matter, we move on to the body of the paper.
-%% Sections are demarcated by \section and \subsection, respectively.
-%% Observe the use of the LaTeX \label
-%% command after the \subsection to give a symbolic KEY to the
-%% subsection for cross-referencing in a \ref command.
-%% You can use LaTeX's \ref and \label commands to keep track of
-%% cross-references to sections, equations, tables, and figures.
-%% That way, if you change the order of any elements, LaTeX will
-%% automatically renumber them.
-
-%% We recommend that authors also use the natbib \citep
-%% and \citet commands to identify citations.  The citations are
-%% tied to the reference list via symbolic KEYs. The KEY corresponds
-%% to the KEY in the \bibitem in the reference list below. 
-
 \section{Introduction} \label{sec:intro}
-Introduction goes here!
+Introduction goes here! Am I updating?
 
 
 \section{Data} \label{sec:data}
-What is data? How did we get it? How did we tweak it? Figures and stuff!
+Data for this project was acquired from the Gamma-ray Burst Monitor (GBM) onboard the Fermi Gamma-ray Space Telescope, as well as the GOES-15 sattelite's x-ray imager.
+Solar flare data from GOES  was provided by Andrew Inglis.
+The data is formatted in a .fits file, with thw first two columns corresponding to the flux of the 1-8\AA and 0.5-4\AA channels respectively.
+
 
 
 \section{Methods} \label{sec:methods}
-What assumptions did we make? What did we do? Show them corner plots, maybe some model comparison???
+Once our data is cleanly organized into a time series containing time, intensity, and error arrays, we can begin our modeling algorithm. We model the flare envelope using the flare model:
 
+\begin{equation}
+	I(t) = A \lambda exp{\left( \frac{-\tau_1}{t-t_s}-\frac{t-t_s}{\tau_2}\right)}
+	\label{model}
+\end{equation}
 
+where $t$ is the time since trigger, $t_s$ is the start tie, $A$ is the pulse amplitude, $\tau_1$ and $\tau_2$ are characteristics of the pulse rise and decay respectively, and 
+$\lambda = exp(2\frac{\tau_1}{\tau_2}]^{1/2}$
+The free parameters for our fit are $A$, $\tau_1$, and $\tau_2$.
+We generate our initial guesses for these parameters using a simple function that takes the maximum of the flare as $A$, $\tau_1$ to be $\frac{1}{3}$ of the length of our flare, and $\tau_2$ to similarly be $\frac{2}{3}$ the length of our flare.
+To model a QPO, we use a covariance function, or kernel function $k(\tau)$, where $\tau_{ij}$ is the matrix $\tau{ij} = t_i-t_j$. To model a QPO, we utilize Celerite's built-in ``terms'' class to define a covariance function representing stochastically-driven, dampened harmonic oscillator, defined by the differential equation:
+
+\begin{equation}
+	\left( \frac{d^2}{dt^2} + \frac{\omega_0}{Q} \frac{d}{dt} + \omega_0^2 \right) y(t) = \epsilon(t) 
+	\label{sho}
+\end{equation}
+
+Where $\omega_0$ corresponds to the natural frequency of the undamped oscillator, $Q$ is the quality factor, and $\epsilon(t)$ is a stochastic driving force.
+There is an additional scaling term $S_0$ in the PSD of this process that corresponds to the power at natural frequency, $\omega=\omega_0$. These are the free parameters of the kernel.
+These paremeters were set to constant values as an initial guess, based upon known values from a real solar flare.
+
+Finally, we similarly model a red noise process using another model in the ``terms'' class in Celerite defined by:
+
+\begin{equation}
+	k(\tau) = a * exp(-c\tau)
+	\label{rednoise}
+\end{equation}
+
+Where $a$ and $c$ are similar terms for correlational strength and timescale, that are similarly free, and guessed based on known values from a real solar flare.
+
+From all of these models, we can write priors for our free parameters. For the same of convenience, we applied tophat priors for each of these parameters within reasonable known values of these. From here, we initialized the objects, and used them to construct a GP-class (Gaussian Process) object. This allows us to adjust the parameters of the model and parameters with a simple input function, as well as do measurements on the likelihood and prior of the entire fit.
+
+From here, we ran a simple optimization scheme to compute the optimized values of each of the free parameters, by running scipy's optimization method, minimize, over the GP-class likelihood function, over the parameterspace defined by the GP objects parameter vector. By minimizing the negative log likelihood, we find the optimal values for a fit, which was primarily effective for the envelope paremters.
+
+To better understand the parameter-space, and to maximize the probability of our fit, we resort to Markov chain Monte Carlo sampling (MCMC). (Explanation of MCMC)
+Using the emcee package, we initialize a set of walkers to explore the parameter-space of the model.
 
 
 \section{Discussion} \label{sec:discussion}
@@ -269,17 +207,8 @@ Let's talk about what happened.
 
 
 \begin{thebibliography}{}
-	\bibitem{hello} Sources! 
+	\bibitem[Something(2017)]{numbers}Something 2017
 \end{thebibliography}
-%% This command is needed to show the entire author+affilation list when
-%% the collaboration and author truncation commands are used.  It has to
-%% go at the end of the manuscript.
-%\allauthors
-
-%% Include this line if you are using the \added, \replaced, \deleted
-%% commands to see a summary list of all changes at the end of the article.
-%\listofchanges
 
 \end{document}
 
-% End of file `sample61.tex'.
