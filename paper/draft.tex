@@ -57,6 +57,7 @@
 \newcommand{\vdag}{(v)^\dagger}
 \newcommand\aastex{AAS\TeX}
 \newcommand\latex{La\TeX}
+\newcommand{\fermi}{\mbox{\textit{Fermi}}}
 
 %% Reintroduced the \received and \accepted commands from AASTeX v5.2
 
@@ -140,16 +141,76 @@ Office B356B\\
 Seattle, WA 98195, USA}
 
 \begin{abstract} \label{sec:abstract} 
-	Solar flare analysis for quasi-periodic oscillations (QPOs)  was formally done using Fourier power spectra analysis, limiting computational efficiency to $\mathcal{O}(n^2)$.
-We demonstrate a more effective and efficient method of modeling solar flare data using Gaussian Processes, a continuous-domain model, which scales at $\mathcal{O}(n)$ in one-dimensional models, and provide demonstrations of these methods by applying it to both simulated and real astronomical datasets.
-Using the package Celerite for Gaussian processes, we provide demonstrations of effectively modeling QPOs using a self-correllation function (a kernel function) to model and simulate solar flare phenomena, and then to remodel and capture the original characteristics of the simulated flare data, using standard optimization methods as well as Markov-chain Monte Carlo sampling.
-After demonstrating the effectiveness of these fitting methods, we go on to apply these modeling/fitting methods to capture the characteristics of real solar flare data, and discuss the potential use of the methods for automated solar flare and QPO detection.
+Despite decades of study at all wavelengths, the exact conditions under which solar flares occur, their energy release mechanisms, and their radiation processes are not well understood. Quasi-periodic pulsations (QPPs) in solar flares have recently emerged as key diagnostics of the plasma conditions and flare triggering processes, but detecting these pulsations reliably has in practice proven difficult. Here, we propose a new reliable and efficient method of modelling solar flare data using Gaussian Processes. This method allows for testing for the presence of a quasi-periodic signal in the presence of a flare envelope and other sources of non-periodic variability. We show the effectiveness of the new approach using both simulated data as well as solar flare observations of M- and X-class flares observed with GOES and the Fermi Gamma-Ray Burst Monitor (GBM).
+
+[ADD RESULTS HERE]
+
+	%Solar flare analysis for quasi-periodic oscillations (QPOs)  was formally done using Fourier power spectra analysis, limiting computational efficiency to $\mathcal{O}(n^2)$.
+%We demonstrate a more effective and efficient method of modeling solar flare data using Gaussian Processes, a continuous-domain model, which scales at $\mathcal{O}(n)$ in one-dimensional models, and provide demonstrations of these methods by applying it to both simulated and real astronomical datasets.
+%Using the package Celerite for Gaussian processes, we provide demonstrations of effectively modeling QPOs using a self-correllation function (a kernel function) to model and simulate solar flare phenomena, and then to remodel and capture the original characteristics of the simulated flare data, using standard optimization methods as well as Markov-chain Monte Carlo sampling.
+%After demonstrating the effectiveness of these fitting methods, we go on to apply these modeling/fitting methods to capture the characteristics of real solar flare data, and discuss the potential use of the methods for automated solar flare and QPO detection.
 \end{abstract}
 
 \keywords{keywords go here}
 
 \section{Introduction} \label{sec:intro}
-Introduction goes here.
+Solar flares are the most powerful events in the solar system, releasing energies in excess of $10^{32}$~erg in tens of minutes across the entire electromagnetic spectrum \citep[e.g.\ ][]{fletcher2011}. 
+They are closely connected to the acceleration of particles into interplanetary space and thus with variations in the solar wind observed as space weather. 
+Solar flares tend to occur in magnetically active regions, and are believed to be caused by a rapid release of energy stored as inductive magnetic fields in the solar corona. 
+
+Despite decades of study at all wavelengths, the exact conditions under which solar flares occur, their energy release mechanisms, and their radiation processes are not well understood.
+Magnetic reconnection is believed to be the primary driver of the energy release, but many open questions about the exact processes occurring remain. 
+The hard X-rays are believed to be caused by bremsstrahlung of accelerated electrons as they precipitate in the solar chromosphere,  but both the details of the electron acceleration and precipitation are currently unknown.
+The detection of quasi-periodic pulsations (QPPs)\footnote{\normalsize{The same phenomenon is usually called quasi-periodic oscillation (QPO) in the astronomy community, but we will adhere to the solar physics nomenclature for consistency}} -- roughly coherent oscillations in the light curve on timescales of seconds to minutes -- has opened up the possibility of coronal seismology during solar flares. 
+There is particuarly strong interest in hard X-ray QPPs, because they are believed to carry information about both solar flare triggering and energy release mechanisms \citep[see e.g.][]{nakariakov2009}. 
+Flares are bright features that can be observed down to fractions of a second, making it possible to resolve the wave transit time across magnetic plasma structures and thus study magnetohydrodynamic (MHD) waves in more detail than possible in any other way. 
+
+Understanding these processes in detail is important not only for advancing our understanding of solar MHD processes and plasma physics, but also of interest in the context of stellar flares now observed in abundance with instruments like \textit{Kepler}. 
+Understanding the creation mechanisms of QPPs in solar flares will provide us with key diagnostics for the physical conditions in stars \citep[e.g.][]{kowalski2010}.
+The details of the MHD processes and reconnection physics in the sun are highly relevant to other phenomena observable with \fermi/GBM where magnetic reconnection likely plays a key role, for example bursts from magnetars, whose triggering mechanisms are currently unknown  \citep{turolla2015}. 
+Magnetar bursts have been likened to solar flares in their statistical properties and morphology before \citep{prieskorn2012} and have also shown QPPs\citep{huppenkothen2014}, thus it is not inconceivable that, while magnetars are vastly different from the sun, similar processes might occur in terms of the underlying reconnection.
+
+The existence of QPPs in solar flares has been known for decades, but they have only recently emerged as key diagnostics of the plasma conditions and flare triggering processes \citep[e.g.][ and references therein]{nakariakov2009}. 
+A key driving factor is the ability to study active solar regions with a high spatial and spectral resolution in multiple wavelength ranges. 
+
+Significant progress has also been made in explaining QPPs with physical models, which generally fall into two classes.
+In the first, magnetic reconnection proceeds in a ``bursty'', somewhat regular fashion, modulating the number of accelerated electrons and thus the intensity of the observed radiation \citep{kliem2000,ofman2006,murray2009}. 
+The second class of models directly links the observed oscillations to MHD oscillations or waves in some of the flare parameters, e.g.\ the rate of energy release, particle acceleration, and particle dynamics \citep{nakariakov2007,pascoe2007}. 
+In this case, periodicities are prescribed by resonances that act as direct tracer of the magnetic processes in the flare emitting region.
+
+It is likely that QPPs in different flares are generated by different mechanisms, and several mechanisms might occur in the same flare.
+It has been possible to infer the likely physical mechanisms operating for a very small sample ($\sim 5$) of flares \citep{asai2001,melnikov2005,inglis2008}. In particular, the detection of multiple independent QPPs in a single flare is highly indicative of the underlying process because various physical models allow only for very specific resonances \citep{melnikov2005,inglis2009}. 
+Multi-wavelength and spatially resolved data has also been crucial for understanding the properties of QPPs and their likely origin. 
+
+Despite the successes in identifying the QPP mechanisms in few individual flares, no overall picture of QPP formation has emerged for the majority of flares. 
+Observational data and current data analysis techniques do not permit an unambiguous choice between various models of QPPs in solar flares.
+To date, none of the proposed models have been confidently excluded, nor have any been identified as the dominant QPP formation mechanism. 
+This is partly due to the lack of high-quality multi-wavelength or spatially resolved data for many flares. 
+However, there is a crucial dearth of large-scale sample studies of QPPs in solar flares, and it has therefore not been possible to relate QPP parameters to other physical properties of the flare. 
+Studies of solar flare variability are often framed as QPP searches, leaving the information contained in variability patterns largely unexplored. (though some studies of the wavelength-dependence of variability exist, \citep{mcateer2007}).
+
+The lack of large-scale studies of QPPs and variability is rooted in the technical challenge of QPP identification in the presence of complex structures in the hard X-ray light curve. 
+Until recently, identification was a labour-intensive task, difficult to automate for large samples, and involved the manual de-trending of the light curve to remove the overall rising and falling trends of the \textit{flare envelope}, followed by a visual identification of the residuals to identify QPPs. 
+As recently pointed out by \citep{inglis2015} this method is also error-prone, because it does not correctly account for inherent aperiodic variability (also called ``red noise'') present in the flare.
+\citep{inglis2015} instead suggested a Fourier-based method taking account of this aperiodic variability based on methodology developed for Active Galactic Nuclei (AGN), while \citep{simoes2015} employed a similar approach using wavelets. 
+
+Disentangling periodic and quasi-periodic signals from aperiodic variability has been a major problem for this field. 
+The reason lies in the transient nature of these flares and bursts, for which Fourier methods are inherently not well suited, because the assumption that mean and variance of the data do not change over time breaks down in these data sets, as was shown for magnetar bursts in . 
+This especially hurts QPP studies in solar flares because these signals are often observed at low frequencies where the biases introduced by the method are strongest. 
+
+The current quandary is that two classes of methods exist, both of which make strong assumptions and neither of which is a good model of the data. On the one hand, detrending techniques assume the solar flare consists of two processes operating on independent time scales, a slowly varying flare envelope, and a faster, possibly periodic process. 
+
+On the other hand, Fourier- and wavelet-based models assume a purely stochastic process switching on and off at the start and end of the flare, with a potential QPP on top of this process, but disregard the idea of an underlying envelope entirely. 
+The former model is likely to grossly overestimate the number of QPPs found in solar flares because it often does not account for aperiodic variability. The latter has been shown to underestimate the number of QPPs at lower frequencies \citep{huppenkothen2013}. 
+Both lead to systematic biases in the results that have not been adequately characterized.
+
+The reliable detection of QPPs in solar flares is a difficult problem, but modern advances in computer science, particularly concerning a flexible class of models called Gaussian Processes \citep[GPs;][]{rasmussen2006}, point to a way forward. Instead of either directly modelling the lightcurve or some transformed version of it, GPs model the \textit{covariance} between data points with a parametric function (also called \textit{covariance function}). 
+
+This approach has several clear advantages over alternative methods. (i) It represents the best of both worlds: it is possible to self-consistently include both deterministic components, e.g.\ a flare envelope, and stochastic components, such as red noise, \citep{aigrain2015}, in the same model. This eliminates common biases in the typical approach of removing the flare envelope by using a running boxcar. %The model represents the best of both worlds: it allows inclusion of the overall flaring shape of the solar flare, as well as the commonly observed red noise component. 
+Both red noise and QPPs have direct formulations in terms of covariance functions, thus the model can be directly used as a basis to test for QPPs. 
+(ii) The fully probabilistic formulation allows for straightforward model comparisons. It will be possible to test for the presence of various components (e.g. specific formulations of red noise or a flare envelope) directly, allowing for a much more precise model of the flare variability.
+(iii) Even if no QPP is detected, the parameters of the covariance function serve as a proxy for relevant time scales in the system, allowing for direct interpretation of these time scales e.g.\ in the context of models for bursty reconnection. 
+
 
 
 \section{Data} \label{sec:data}
@@ -225,12 +286,13 @@ Using the emcee package, we initialize a set of walkers to explore the parameter
 Let's talk about what happened.
 
 
+\bibliography{solarflares}
 
 
 
-\begin{thebibliography}{}
-	\bibitem[Something(2017)]{numbers}Something 2017
-\end{thebibliography}
+%\begin{thebibliography}{}
+%	\bibitem[Something(2017)]{numbers}Something 2017
+%\end{thebibliography}
 
 \end{document}
 
