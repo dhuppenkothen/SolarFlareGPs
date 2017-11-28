@@ -140,7 +140,8 @@ New York, NY 10003, USA}
 Office B356B\\
 Seattle, WA 98195, USA}
 
-\begin{abstract} \label{sec:abstract} 
+\begin{abstract} \label{sec:abstract} :w
+
 Despite decades of study at all wavelengths, the exact conditions under which solar flares occur, their energy release mechanisms, and their radiation processes are not well understood. Quasi-periodic pulsations (QPPs) in solar flares have recently emerged as key diagnostics of the plasma conditions and flare triggering processes, but detecting these pulsations reliably has in practice proven difficult. Here, we propose a new reliable and efficient method of modelling solar flare data using Gaussian Processes. This method allows for testing for the presence of a quasi-periodic signal in the presence of a flare envelope and other sources of non-periodic variability. We show the effectiveness of the new approach using both simulated data as well as solar flare observations of M- and X-class flares observed with GOES and the Fermi Gamma-Ray Burst Monitor (GBM).
 
 [ADD RESULTS HERE]
@@ -221,7 +222,26 @@ The data is formatted in a .fits file, with thw first two columns corresponding 
 
 
 \section{Methods} \label{sec:methods}
-Once our data is cleanly organized into a time series containing time coordinates of our measurements, $x$, intensity measurements, $y$, and error $\delta_y$, in separate arrays, we can begin our modeling algorithm. We model the flare envelope using the flare model:
+\subsection{Gaussian Processes}
+In the regime of 1D continuous data sets, stochastic processes (such as those observed in many solar flare models) (CITATION) are considered Gaussian if the finite set of inputs of our model (in our case, the time indexes of our measurements, $t_i$) can be correlated with a normally distributed random variable.
+Furthermore, linear combinations of these random variables, defined as $\tau_{ij}=t_i-t_j$, form a multivariate normal distribution.
+The distribution of these random variables over our input space can be used to model correlated stochastic processes, such as the quasi-periodic oscillations we aim to observe, using an autocorrelation, or kernel function $k(\tau)$.
+Combining the aurocorrelation function $k_\alpha (\tau)$ along with some arbitrary mean funtion $\mu_\theta (t)$, we have our Gaussian process model, where $\alpha$ and $\theta$ are the parameters of the kernel and mean functions respectively.
+
+The benefits of this model arises in the computation of the marginal likelihood. Since the model, by design, has a Gaussian prior, when marginalizing over functionspace, we're left with the log form of the likelihood:
+\begin{equation}
+	\ln \mathcal{L}(\theta, \alpha) = \ln p(y|x, \theta, \alpha) = -\frac{1}{2}r_\theta^T K_\alpha^{-1}r_\theta - \ln det(K_\alpha)^{\frac{1}{2}} - \frac{N}{2}\ln(2 \pi)
+	\label{loglike}
+\end{equation}
+
+From this, we have a measure over which we can easily optimize and gain semiaccurate calculations of our mean model parameters, $\theta$.
+
+\subsection{Random Walk Monte Carlo Sampling}
+Estimating the kernel parameters requires a finer approach than our optimization method, as the likelihood measure in parameter-space may be quite complicated and difficult to compute, especially in higher dimensions.
+As such, once we have a ``good'' estimate of the initial parameters from our optimization scheme, we can use our optimized values to begin our sampling
+
+\subsection{Modeling Protocol}
+Once our data is cleanly organized into a time series containing time coordinates of our measurements, $x$, intensity measurements, $y$, and error $\delta_y$, in separate arrays, we can begin our modeling algorithm. We model the flare envelope using the model:
 
 \begin{equation}
 	\mu_{\theta}(t) = A \lambda exp{\left( \frac{-\tau_1}{t-t_s}-\frac{t-t_s}{\tau_2}\right)}
@@ -234,9 +254,8 @@ The free parameters for our fit are $A$, $\tau_1$, and $\tau_2$, which we will r
 We generate our initial guesses for this parameter vector using a simple function that takes the maximum of the flare as $A$, $\tau_1$ to be $\frac{1}{3}$ of the length of our flare, and $\tau_2$ to similarly be $\frac{2}{3}$ the length of our flare.
 These initial guesses need only to be approximate, as we'll be optimizing these values after defining all free parameters of our model.
 
-To model a QPO, we use a covariance function, or kernel function $k(\tau_{ij})$, where $\tau_{ij}$ is the matrix $\tau_{ij} = t_i-t_j$. To model a QPO using a kernel, we begin utilizing Celerite, a library for 1D Gaussian process regression. We can initialize our envelope model using the aptly-named abstract ``Model'' class.
-Similarly, using Celerite's built-in ``terms'' class, we define a kernel representing stochastically-driven, dampened harmonic oscillator, defined by the differential equation:\footnote{I can include the whole solution set, which depends on the size of the quality factor $Q$, is that useful?}
-
+We'll model our phenomena of interest, QPOs, via a kernel function $k(\tau)$.  Our modeling protocol is all handled through Celerite a library for 1D Gaussian process regression problems.
+We model our QPO using a stochastically driven harmonic oscillator, classically defined as:
 
 \begin{equation}
 	\left( \frac{d^2}{dt^2} + \frac{\omega_0}{Q} \frac{d}{dt} + \omega_0^2 \right) y(t) = \epsilon(t) 
@@ -247,7 +266,7 @@ Where $\omega_0$ corresponds to the natural frequency of the undamped oscillator
 There is an additional scaling term $S_0$ in the PSD of this process that corresponds to the power at natural frequency, $\omega=\omega_0$.
 Working under the assumption that all quasi-periodic oscillations are triggered by the same mechanism, we set our initial values of these parameters as those we captured from a real flare.
 
-Finally, we similarly model a red noise process using another model in the ``terms'' class in Celerite defined by:
+We'll similarly define a rednoise term in the model, defined by kernel function:
 
 \begin{equation}
 	k(\tau) = a * exp(-c\tau)
@@ -262,25 +281,19 @@ For the sake of convenience and simplicity, we applied tophat priors for each of
 \footnote{We may want to think about our priors a bit more before I write out a table for them\ldots}	
 
 
-From here, we have all neccessary information to initialize our models: the envelope model and the kernel functions are initialized with their parameters, the initial guesses for each parameter, and the prior distribution for each parameter.
+From here, we have all neccessary information to initialize our models: the mean envelope model $\mu_\theta$  and the kernel function $k_\alpha$ are initialized with initial guesses for their parameters, ($\theta_0$ and $\alpha_0$), and the prior distribution for each parameter.
 From here, we can initialize a GP-class (Gaussian Process) object, utilizing the model as the mean function for the process, and the kernel function as a constructor for the kernel matrix.
-Once initialized, we have access to several of the GP computations encoded in the Celerite solver, such as computing the kernel matrix and factorizing.
 
-With these computations ready, we feed the time coordinates ($x$) as well as intensity error ($\delta_y$) into the GP.compute() function to compute the kernel matrix.
-With the kernel matrix computed, we can begin the optimization process. For a fit, we want to maximize the likelihood of our fit over parameterspace defined by $\theta$ and $\alpha$. 
-For a Bayesian model, we can write out the computation of the likelihood as a result of Bayes theorem \footnote{Do I need to know how to derive this?}. It's more useful to write out the log-form:
+With the coordinate vector of times($t$), as well as our local uncertainties $\delta_y$, we factorize the kernel matrix, and therefore compute \ref{loglike}.
 
-\begin{equation}
-	\ln \mathcal{L}(\theta, \alpha) = \ln p(y|x, \theta, \alpha) = -\frac{1}{2}r_\theta^T K_\alpha^{-1}r_\theta - \ln det(K_\alpha)^{\frac{1}{2}} - \frac{N}{2}\ln(2 \pi)
-	\label{loglike}
-\end{equation}
-
-Where the vector $r_\theta \equiv y-\mu_\theta (x)$. With this function defined, we can define a function that computes the negative log-likelihood ($-\mathcal{L}$) as a function of the joint parameter vector ($\theta, \alpha$).
-With this, we can use any optimization scheme to find the optimal values for the parameter vectors; in our case, we called the minimize function from scipy's optimization submodule, utilizing Limited-memory BFGS optimization.
-
-This is generally sufficient to compute the optimal parameters of the solar flare envelope, $\theta$, but for the QPO parameters, $\alpha$, we can better understand the parameter-space, and to maximize the probability of our fit by using Markov chain Monte Carlo sampling (MCMC).
+\subsection{Regression}
+With a computationally tractable method for computing $\mathcal{L}$, we can begin the process of computing optimal values for $\theta$ and $\alpha$.
+It is generally sufficient to compute the optimal parameters of the solar flare envelope, $\theta$, using a traditional nonlinear optimization method. By simply defining a minimization optimization for the negative log-likelihood over the free parameters, we were able to sufficiently compute the envelope parameters $\theta$.
+However, the kernel parameters, $\alpha$, have a significanly smaller effect on the likelihood computation. 
+We can better understand the parameter-space that contains $\alpha$, as well as locate maxima the probability of our fit by using Markov chain Monte Carlo sampling (MCMC).
 Using the emcee package, we initialize a set of walkers to explore the parameter-space of the model, distributed about the optimal parameters previously computed. Defining a log-probability method as the sum of our likelihood computation as well as our prior at the parameterspace $\theta$ acts as our probability distribution for our walkers.
 
+The ending result is a sampled distribution of our probability in parameterspace. We can visualize this in corner, and from this distribution, we can draw many of our conclusions.
 
 \section{Discussion} \label{sec:discussion}
 Let's talk about what happened.
