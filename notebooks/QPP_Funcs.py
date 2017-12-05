@@ -6,6 +6,7 @@ import emcee as mc
 import corner
 from celerite.modeling import Model
 from scipy.optimize import minimize, curve_fit
+from astropy.io import fits
 
 
 #no way of setting prior in constructor? simply redefine log_prior?
@@ -32,12 +33,11 @@ class CTSModel_prior(Model):
         probA = 1.
         probtau1 = 1.
         probtau2 = 1.
-        T=2000.
-        if not (self.log_A>0 and self.log_A<25):
+        if not (self.log_A>1 and self.log_A<25):
             probA = 0.
-        if not ((self.log_tau1>0 and self.log_tau1<15)):
+        if not ((self.log_tau1>1 and self.log_tau1<15)):
             probtau1 = 0.
-        if not ((self.log_tau2>0 and self.log_tau2<15)):
+        if not ((self.log_tau2>1 and self.log_tau2<15)):
             probtau2 = 0.
         return np.log(probA * probtau1 * probtau2 * np.e)
 
@@ -51,7 +51,7 @@ class SHOTerm_Prior(ce.terms.SHOTerm):
         prob_omega0 = 1.
         
         #again, using simple (naive) tophat distributions
-        if not ((self.log_S0 > -10) and (self.log_S0 < 50)):
+        if not ((self.log_S0 > -10) and (self.log_S0 < 20)):
             prob_S0 = 0.
         if not (self.log_Q > -20 and self.log_Q < 20):
             prob_Q = 0.
@@ -82,14 +82,12 @@ def simulate(x, model, kernel, noisy = False):
         y += np.random.poisson(y)
     return np.abs(y)
 
-#use poisson noise, with rate paremeter
-#np.random.poisson(model(t))
-#
-
 
 #defining fitting functions for our GP
 def neg_log_like(params, y, gp):
     gp.set_parameter_vector(params)
+    print params
+    print -gp.log_likelihood(y)
     return -gp.log_likelihood(y)
 
 def grad_neg_log_like(params, y, gp):
@@ -98,15 +96,15 @@ def grad_neg_log_like(params, y, gp):
 
 def initguess (x, y):
     A = max(y)
-    t1 = max(x) * (1./3.)
-    t2 = max(x) * (2./3.)
+    t1 = max(x) * (1./4.)
+    t2 = max(x) * (1./2.)
     return A, t1, t2
 
 def optimize_gp(gp, y):
     print("Initial log-likelihood: {0}".format(gp.log_likelihood(y)))
     bounds = gp.get_parameter_bounds()
     initial_params = gp.get_parameter_vector()
-    soln = minimize(neg_log_like, initial_params, jac=grad_neg_log_like, method="L-BFGS-B", bounds=bounds, args=(y, gp))
+    soln = minimize(neg_log_like, initial_params, jac=grad_neg_log_like, method="L-BFGS-B", args=(y, gp))
     print("Final log-likelihood: {0}".format(-soln.fun))
     print ("Optimized log-parameters: " + str(soln.x))
     return soln
@@ -171,16 +169,15 @@ def plot_corner(chain, labels = None):
     fig = corner.corner(flat_samples, bins=50, labels = labels, truths = maxparams,  range = np.ones(dim))
     return fig, maxparams
 
-def plot_gp(x, y, yerr, gp, model, soln=0, chain=[0]):
+def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=[0]):
     init_params = gp.get_parameter_vector()
     fig = plt.figure()
-    plt.errorbar(x, y, yerr=yerr, fmt='k.', alpha = 0.05, label = "Data")
-    if not(soln == 0):
-        ytest, yvar = gp.predict(y, x, return_var=True)
-        ystd = np.sqrt(yvar)
-        plt.plot(x, ytest, 'r--', label = "Optimized Prediction")
-        plt.fill_between(x, ytest+ystd, ytest-ystd, color='r', alpha=0.3, edgecolor='none')
-
+    plt.errorbar(x, y, yerr=yerr, fmt='k.', alpha = 0.01, label = "Data")
+    
+    if (predict == True):
+        ytest = gp.mean.get_value(x)
+        plt.plot(x, ytest, 'r-', label = label)
+       
     if not(len(chain) == 1):
         labeled = False
         nsteps = len(chain[0])
@@ -201,3 +198,25 @@ def plot_gp(x, y, yerr, gp, model, soln=0, chain=[0]):
                     plt.fill_between(x, ymc+ymcstd, ymc-ymcstd, color='g', alpha=0.1, edgecolor='none')
     plt.legend()
     return fig
+
+def load_data(datadir, burstid):
+    f = datadir+'go'+str(burstid)+'.fits'
+    hdulist = fits.open(f)
+    data = hdulist[2].data
+    time = data.field('TIME')
+    flux = np.sum(data.field('FLUX'), axis=2)[0]
+    time = time[0]-time[0,0]
+    return time, flux
+
+def trim_data(time, flux, pre=500, post=1500):
+    maxin = np.where(flux == np.max(flux))[0][0]
+    if maxin<pre:
+        pre=maxin-1
+    if len(time)-maxin<post:
+        post = len(time)-maxin -1
+    time_trim = time[(maxin-pre):(maxin+post)]
+    if (len(time_trim)==0):
+        print("\nNo time at index: " + str(maxin) + "\nPre: " + str(pre) + "\tPost: " + str(post))
+    time_trim = time_trim-time_trim[0]
+    flux_trim = flux[(maxin-pre):(maxin+post)]
+    return time_trim, flux_trim
