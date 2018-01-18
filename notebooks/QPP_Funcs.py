@@ -15,15 +15,21 @@ class CTSModel_prior(Model):
     parameter_names = ("log_A", "log_tau1", "log_tau2")
  
     def get_value(self, t):
-        lam = np.exp(np.sqrt(2*np.exp(self.log_tau1-self.log_tau2)))
-        return np.exp(self.log_A)*lam*np.exp((-np.exp(self.log_tau1)/t)-(t/np.exp(self.log_tau2)))
+        A = np.exp(self.log_A)
+        tau1 = np.exp(self.log_tau1)
+        tau2 = np.exp(self.log_tau2)
+        lam = np.exp(np.sqrt(2*np.exp(tau1/tau2)))
+        return A*lam*np.exp((-tau1/t)-(t/tau2))
     
     #the gradient terms were manually calculated
     def compute_gradient(self, t):
-        lam = np.exp(np.sqrt(2*np.exp(self.log_tau1-self.log_tau2)))
-        dA = (1./np.exp(self.log_A)) * self.get_value(t)
-        dtau1 = ((1/(np.exp(self.log_tau2) * np.log(lam))) - (1/t)) * self.get_value(t)
-        dtau2 = ((t/(np.exp(self.log_tau2)**2)) - (np.exp(self.log_tau1)/((np.exp(self.log_tau2)**2) * np.log(lam)))) * self.get_value(t)
+        A = np.exp(self.log_A)
+        tau1 = np.exp(self.log_tau1)
+        tau2 = np.exp(self.log_tau2)
+        lam = np.exp(np.sqrt(2*np.exp(tau1/tau2)))
+        dA = (1./A) * self.get_value(t)
+        dtau1 = ((1/(np.sqrt(2*tau1*tau2))) - (1/t)) * self.get_value(t)
+        dtau2 = ((t/(tau2**2))-(tau1/((tau2**2)*np.sqrt(2*tau1/tau2)))) * self.get_value(t)
         return np.array([dA, dtau1, dtau2])
         
 
@@ -33,7 +39,7 @@ class CTSModel_prior(Model):
         probA = 1.
         probtau1 = 1.
         probtau2 = 1.
-        if not (self.log_A>1 and self.log_A<25):
+        if not (self.log_A>1 and self.log_A<25): 
             probA = 0.
         if not ((self.log_tau1>1 and self.log_tau1<15)):
             probtau1 = 0.
@@ -51,7 +57,7 @@ class SHOTerm_Prior(ce.terms.SHOTerm):
         prob_omega0 = 1.
         
         #again, using simple (naive) tophat distributions
-        if not ((self.log_S0 > -10) and (self.log_S0 < 20)):
+        if not ((self.log_S0 > -20) and (self.log_S0 < 10)):
             prob_S0 = 0.
         if not (self.log_Q > -20 and self.log_Q < 20):
             prob_Q = 0.
@@ -68,7 +74,7 @@ class RealTerm_Prior(ce.terms.RealTerm):
         prob_c = 1.
      
         #again, using simple (naive) tophat distributions
-        if not (self.log_a > -20 and self.log_a < 10):
+        if not (self.log_a > -20):# and self.log_a < 20):
             prob_a = 0.
         if not (self.log_c > -20 and self.log_c < 10):
             prob_c = 0.
@@ -86,25 +92,29 @@ def simulate(x, model, kernel, noisy = False):
 #defining fitting functions for our GP
 def neg_log_like(params, y, gp):
     gp.set_parameter_vector(params)
-    print params
-    print -gp.log_likelihood(y)
+    #print params
     return -gp.log_likelihood(y)
 
 def grad_neg_log_like(params, y, gp):
     gp.set_parameter_vector(params)
     return -gp.grad_log_likelihood(y)[1]
 
+#defining fitting functions for our GP
+def neg_log_prob(params, y, gp):
+    return -log_probability(params, y, gp)
+
 def initguess (x, y):
     A = max(y)
-    t1 = max(x) * (1./4.)
-    t2 = max(x) * (1./2.)
+    t1 = max(x) * (1./5.)
+    t2 = max(x) * (2./5.)
     return A, t1, t2
 
 def optimize_gp(gp, y):
     print("Initial log-likelihood: {0}".format(gp.log_likelihood(y)))
     bounds = gp.get_parameter_bounds()
     initial_params = gp.get_parameter_vector()
-    soln = minimize(neg_log_like, initial_params, jac=grad_neg_log_like, method="L-BFGS-B", args=(y, gp))
+    soln = minimize(neg_log_prob, initial_params, method="L-BFGS-B", args=(y, gp))
+    #soln = minimize(neg_log_like, initial_params, jac=grad_neg_log_like, method="L-BFGS-B", args=(y, gp))
     print("Final log-likelihood: {0}".format(-soln.fun))
     print ("Optimized log-parameters: " + str(soln.x))
     return soln
@@ -117,10 +127,13 @@ def log_probability(params, y, gp):
     lp = gp.log_prior()
     try:
         ll = gp.log_likelihood(y)
+    except numpy.linalg.linalg.LinAlgError:
+        print "Recurse"
+        return log_probability(params, y, gp)
     except RuntimeError:
         ll = np.nan
+
     result = ll + lp
-    
     if not (np.isfinite(lp)):
         return -np.inf
     if np.isnan(ll)==True:
@@ -138,8 +151,8 @@ def sample_gp(paramstart, y, gp, nwalkers = 100, nsteps = 2000, burnin = 500):
     print "Done!"
     return sampler
 
-def plot_chain(chain):
-    flat_samples = chain[:,200:, :].reshape((-1,len(chain[0,0])))
+def plot_chain(chain,  labels = None):
+    flat_samples = chain[:,:,:].reshape((-1,len(chain[0,0])))
     meanparams = np.mean(flat_samples, axis=0)
     nwalkers = len(chain)
     nsteps = len(chain[0])
@@ -151,13 +164,15 @@ def plot_chain(chain):
             axarr[j].plot(np.arange(nsteps), chain[i,:,j], 'k-', alpha=1./np.log(nwalkers))
         meanvals = meanparams[j] * np.ones(50)
         axarr[j].plot(xline, meanvals, 'r--')
+        if (labels != None):
+            axarr[j].set_title(labels[j])
     return fig
 
 def plot_corner(chain, labels = None):
     dim = len(chain[0,0])
     if labels==None:
         labels = str(np.arange(dim))
-    flat_samples = chain[:,200:, :].reshape((-1,dim))
+    flat_samples = chain[:,:, :].reshape((-1,dim))
 
     maxparams = np.empty(dim)
     for i in range(dim):
@@ -166,13 +181,13 @@ def plot_corner(chain, labels = None):
 
         maxparams[i] = np.average([bin_edges[maxindex], bin_edges[maxindex+1]])
 
-    fig = corner.corner(flat_samples, bins=50, labels = labels, truths = maxparams,  range = np.ones(dim))
+    fig = corner.corner(flat_samples, bins=50, labels = labels, truths = maxparams)
     return fig, maxparams
 
 def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=[0]):
     init_params = gp.get_parameter_vector()
     fig = plt.figure()
-    plt.errorbar(x, y, yerr=yerr, fmt='k.', alpha = 0.01, label = "Data")
+    plt.errorbar(x, y, yerr=yerr, fmt='k.', alpha = 0.05, label = "Data")
     
     if (predict == True):
         ytest = gp.mean.get_value(x)
@@ -182,20 +197,22 @@ def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=[0
         labeled = False
         nsteps = len(chain[0])
         nwalkers = len(chain)
-        for i in range(nsteps/10):
-            params = chain[np.random.randint(nwalkers),np.random.randint(100,nsteps)]
+        for i in range(nwalkers/10):
+            params = chain[np.random.randint(nwalkers),nsteps-1]
             gp.set_parameter_vector(params)
             model.set_parameter_vector(params[-3:])
-            ymc, ymcvar = gp.predict(y, x, return_var=True)
-            ymcstd = np.sqrt(ymcvar)
+            ymc = gp.sample_conditional(y,x)
+            aval = 1./nwalkers
+            #ymc, ymcvar = gp.predict(y, x, return_var=True)
+            #ymcstd = np.sqrt(ymcvar)
             if not np.isnan(ymc).any():  
                 if labeled == False:
-                    plt.plot(x, ymc, 'm-', alpha = 0.1, label = "Posterior Predictions")
-                    plt.fill_between(x, ymc+ymcstd, ymc-ymcstd, color='g', alpha=0.1, edgecolor='none')
+                    plt.plot(x, ymc, 'm-', alpha = aval, label = "Posterior Predictions")
+                    #plt.fill_between(x, ymc+ymcstd, ymc-ymcstd, color='g', alpha=0.1, edgecolor='none')
                     labeled = True
                 else: 
-                    plt.plot(x, ymc, 'm-', alpha = 0.1)
-                    plt.fill_between(x, ymc+ymcstd, ymc-ymcstd, color='g', alpha=0.1, edgecolor='none')
+                    plt.plot(x, ymc, 'm-', alpha = aval)
+                    #plt.fill_between(x, ymc+ymcstd, ymc-ymcstd, color='g', alpha=0.1, edgecolor='none')
     plt.legend()
     return fig
 
