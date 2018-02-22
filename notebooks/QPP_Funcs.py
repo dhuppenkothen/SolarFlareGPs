@@ -4,9 +4,14 @@ import matplotlib.pyplot as plt
 import celerite as ce
 import emcee as mc
 import corner
+import h5py
+import astropy.io
 from celerite.modeling import Model
 from scipy.optimize import minimize, curve_fit
 from astropy.io import fits
+from numpy import linalg
+from celerite.solver import LinAlgError
+
 
 
 #no way of setting prior in constructor? simply redefine log_prior?
@@ -59,9 +64,9 @@ class SHOTerm_Prior(ce.terms.SHOTerm):
         #again, using simple (naive) tophat distributions
         if not ((self.log_S0 > -20) and (self.log_S0 < 10)):
             prob_S0 = 0.
-        if not (self.log_Q > -20 and self.log_Q < 20):
+        if not (self.log_Q > -20 and self.log_Q < 3):
             prob_Q = 0.
-        if not (self.log_omega0 > -20 and self.log_omega0 < 20):
+        if not (self.log_omega0 > np.log(1./4000.) and self.log_omega0 < np.log(np.pi)):
             prob_omega0 = 0.
         return np.log(prob_S0*prob_Q*prob_omega0 * np.e)
     
@@ -85,7 +90,7 @@ def simulate(x, model, kernel, noisy = False):
     K = kernel.get_value(x[:, None] - x[None, :])
     y = np.abs(np.random.multivariate_normal(model.get_value(x), K))
     if (noisy==True):
-        y += np.random.poisson(y)
+        y = np.random.poisson(y)
     return np.abs(y)
 
 
@@ -127,9 +132,8 @@ def log_probability(params, y, gp):
     lp = gp.log_prior()
     try:
         ll = gp.log_likelihood(y)
-    except numpy.linalg.linalg.LinAlgError:
-        print "Recurse"
-        return log_probability(params, y, gp)
+    except ce.solver.LinAlgError as err:
+        ll = np.nan
     except RuntimeError:
         ll = np.nan
 
@@ -151,13 +155,15 @@ def sample_gp(paramstart, y, gp, nwalkers = 100, nsteps = 2000, burnin = 500):
     print "Done!"
     return sampler
 
-def plot_chain(chain,  labels = None):
+def plot_chain(chain,  labels = None, burstid=None):
     flat_samples = chain[:,:,:].reshape((-1,len(chain[0,0])))
     meanparams = np.mean(flat_samples, axis=0)
     nwalkers = len(chain)
     nsteps = len(chain[0])
     ndim = len(chain[0][0])
     fig, axarr = plt.subplots(ndim, sharex=True, figsize = (10,10))
+    if burstid!= None:
+        plt.suptitle("Chain Time Series for Burst " + str(burstid))
     xline = np.linspace(0,nsteps)
     for j in range(ndim):
         for i in range(nwalkers):
@@ -168,7 +174,7 @@ def plot_chain(chain,  labels = None):
             axarr[j].set_title(labels[j])
     return fig
 
-def plot_corner(chain, labels = None):
+def plot_corner(chain, labels = None, truevals = None, burstid = None):
     dim = len(chain[0,0])
     if labels==None:
         labels = str(np.arange(dim))
@@ -180,13 +186,19 @@ def plot_corner(chain, labels = None):
         maxindex = np.argmax(hist)
 
         maxparams[i] = np.average([bin_edges[maxindex], bin_edges[maxindex+1]])
-
-    fig = corner.corner(flat_samples, bins=50, labels = labels, truths = maxparams)
+    if truevals == None:
+        fig = corner.corner(flat_samples, bins=50, labels = labels, truths = maxparams)
+    else:
+        fig = corner.corner(flat_samples, bins=50, labels = labels, truths = truevals)
+        if burstid!= None:
+            plt.suptitle("Chain Corner Plot for Burst " + str(burstid))
     return fig, maxparams
 
-def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=[0]):
+def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=[0], burstid = None):
     init_params = gp.get_parameter_vector()
     fig = plt.figure()
+    if burstid!= None:
+        plt.suptitle("Burst and fit for Burst " + str(burstid))
     plt.errorbar(x, y, yerr=yerr, fmt='k.', alpha = 0.05, label = "Data")
     
     if (predict == True):
@@ -202,7 +214,7 @@ def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=[0
             gp.set_parameter_vector(params)
             model.set_parameter_vector(params[-3:])
             ymc = gp.sample_conditional(y,x)
-            aval = 1./nwalkers
+            aval = 10./nwalkers
             #ymc, ymcvar = gp.predict(y, x, return_var=True)
             #ymcstd = np.sqrt(ymcvar)
             if not np.isnan(ymc).any():  
@@ -216,13 +228,15 @@ def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=[0
     plt.legend()
     return fig
 
-def load_data(datadir, burstid):
+def load_data(datadir, burstid, returnhead=False):
     f = datadir+'go'+str(burstid)+'.fits'
     hdulist = fits.open(f)
     data = hdulist[2].data
     time = data.field('TIME')
     flux = np.sum(data.field('FLUX'), axis=2)[0]
     time = time[0]-time[0,0]
+    if returnhead==True:
+        return time, flux, hdulist[0].header
     return time, flux
 
 def trim_data(time, flux, pre=500, post=1500):
@@ -237,3 +251,30 @@ def trim_data(time, flux, pre=500, post=1500):
     time_trim = time_trim-time_trim[0]
     flux_trim = flux[(maxin-pre):(maxin+post)]
     return time_trim, flux_trim
+
+def store_flare(fname, header, t, I, optparams, chain):
+    f = h5py.File(fname, "w")
+    if not isinstance(header, str):
+        stringhead = header.tostring()
+    else:
+        stringhead = header
+    chain_dset = f.create_dataset("chain", chain.shape, dtype = chain.dtype, data=chain)
+    optparams_dset = f.create_dataset("optparams", optparams.shape, dtype = optparams.dtype, data=optparams)
+    header_dset = f.create_dataset("header", (100,), dtype=h5py.special_dtype(vlen=str))
+    header_dset[0] = stringhead
+    flare = np.array((t,I))
+    flare_dset = f.create_dataset("flare", flare.shape, dtype = flare.dtype, data=flare)
+    f.close()
+    print("Stored flare at " + fname)
+    
+def load_flare(fname, astroheader=False):
+    f = h5py.File(fname,"r")
+    head_load = f['header']
+    chain_load = f['chain']
+    flare_load = f['flare']
+    optparams_load = f['optparams']
+    if astroheader==True:
+        return astropy.io.fits.Header.fromstring(head_load[0]), flare_load[0,:], flare_load[1,:], optparams_load, chain_load
+    else:
+        return head_load[0], flare_load[0,:], flare_load[1,:], optparams_load, chain_load
+    f.close()
