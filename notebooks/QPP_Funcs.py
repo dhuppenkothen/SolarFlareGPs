@@ -62,9 +62,9 @@ class SHOTerm_Prior(ce.terms.SHOTerm):
         prob_omega0 = 1.
         
         #again, using simple (naive) tophat distributions
-        if not ((self.log_S0 > -20) and (self.log_S0 < 10)):
+        if not ((self.log_S0 > 0) and (self.log_S0 < 10)):
             prob_S0 = 0.
-        if not (self.log_Q > -20 and self.log_Q < 3):
+        if not (self.log_Q > 0 and self.log_Q < 3):
             prob_Q = 0.
         if not (self.log_omega0 > np.log(1./4000.) and self.log_omega0 < np.log(np.pi)):
             prob_omega0 = 0.
@@ -109,19 +109,21 @@ def neg_log_prob(params, y, gp):
     return -log_probability(params, y, gp)
 
 def initguess (x, y):
-    A = max(y)
-    t1 = max(x) * (1./5.)
-    t2 = max(x) * (2./5.)
+    A = .8*max(y)
+    t1 = int(x[-1:]*1./7)
+    t2 = int(x[-1:]*1./5)
     return A, t1, t2
 
-def optimize_gp(gp, y):
-    print("Initial log-likelihood: {0}".format(gp.log_likelihood(y)))
+def optimize_gp(gp, y, verbose = False):
+    if verbose:
+        print("Initial log-likelihood: {0}".format(gp.log_likelihood(y)))
     bounds = gp.get_parameter_bounds()
     initial_params = gp.get_parameter_vector()
     soln = minimize(neg_log_prob, initial_params, method="L-BFGS-B", args=(y, gp))
     #soln = minimize(neg_log_like, initial_params, jac=grad_neg_log_like, method="L-BFGS-B", args=(y, gp))
-    print("Final log-likelihood: {0}".format(-soln.fun))
-    print ("Optimized log-parameters: " + str(soln.x))
+    if verbose:
+        print("Final log-likelihood: {0}".format(-soln.fun))
+        print ("Optimized log-parameters: " + str(soln.x))
     return soln
 
 def samplepdf(params, scale=1):
@@ -144,15 +146,18 @@ def log_probability(params, y, gp):
         return -np.inf
     return result
 
-def sample_gp(paramstart, y, gp, nwalkers = 100, nsteps = 2000, burnin = 500):
+def sample_gp(paramstart, y, gp, nwalkers = 100, nsteps = 2000, burnin = 500, verbose = False):
     sampler = mc.EnsembleSampler(nwalkers, len(paramstart), log_probability, args=(y, gp))
-    print "Burning in..."
+    if verbose:
+        print "Burning in..."
     p0 = paramstart + 1e-8 * np.random.randn(nwalkers, len(paramstart))
     p0, lp, _ = sampler.run_mcmc(p0, burnin)
-    print "Sampling..."
+    if verbose:
+        print "Sampling..."
     sampler.reset()
     sampler.run_mcmc(p0, nsteps)
-    print "Done!"
+    if verbose:
+        print "Done!"
     return sampler
 
 def plot_chain(chain,  labels = None, burstid=None):
@@ -197,19 +202,20 @@ def plot_corner(chain, labels = None, truevals = None, burstid = None):
 def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=[0], burstid = None):
     init_params = gp.get_parameter_vector()
     fig = plt.figure()
+    
     if burstid!= None:
         plt.suptitle("Burst and fit for Burst " + str(burstid))
     plt.errorbar(x, y, yerr=yerr, fmt='k.', alpha = 0.05, label = "Data")
     
     if (predict == True):
         ytest = gp.mean.get_value(x)
-        plt.plot(x, ytest, 'r-', label = label)
+        plt.plot(x, ytest, 'r--', label = label)
        
-    if not(len(chain) == 1):
+    if(len(chain)!=1):
         labeled = False
         nsteps = len(chain[0])
         nwalkers = len(chain)
-        for i in range(nwalkers/10):
+        for i in range(5):
             params = chain[np.random.randint(nwalkers),nsteps-1]
             gp.set_parameter_vector(params)
             model.set_parameter_vector(params[-3:])
@@ -219,7 +225,7 @@ def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=[0
             #ymcstd = np.sqrt(ymcvar)
             if not np.isnan(ymc).any():  
                 if labeled == False:
-                    plt.plot(x, ymc, 'm-', alpha = aval, label = "Posterior Predictions")
+                    plt.plot(x, ymc, 'm-', alpha = aval, label = "Posterior Samples")
                     #plt.fill_between(x, ymc+ymcstd, ymc-ymcstd, color='g', alpha=0.1, edgecolor='none')
                     labeled = True
                 else: 
@@ -239,8 +245,16 @@ def load_data(datadir, burstid, returnhead=False):
         return time, flux, hdulist[0].header
     return time, flux
 
-def trim_data(time, flux, pre=500, post=1500):
+def trim_data(time, flux, cutoff = .05):
     maxin = np.where(flux == np.max(flux))[0][0]
+    threshold = (np.max(flux)-np.min(flux))*cutoff + np.min(flux)
+    pre = maxin - (np.where(flux[:maxin] < threshold)[0])[-1:][0]
+    post = (np.where(flux[maxin:] < threshold)[0])[0]
+    length = pre+post
+    buffer = length/5
+    pre += buffer
+    post += buffer
+    
     if maxin<pre:
         pre=maxin-1
     if len(time)-maxin<post:
@@ -278,3 +292,41 @@ def load_flare(fname, astroheader=False):
     else:
         return head_load[0], flare_load[0,:], flare_load[1,:], optparams_load, chain_load
     f.close()
+    
+def plot_gp_subplot(ax, x, y, yerr, gp, model, label = "Prediction", predict_color=None, chain=[0], burstid = None):
+    init_params = gp.get_parameter_vector()
+    if burstid!= None:
+        ax.set_title("Burst and fit for Burst " + str(burstid))
+    ax.errorbar(x, y, yerr=yerr, fmt='k.', alpha = 0.05, label = "Data")
+    
+    if (predict_color != None):
+        ytest = gp.mean.get_value(x)
+        ax.plot(x, ytest, predict_color, label = label)
+       
+    if(len(chain)!=1):
+        labeled = False
+        nsteps = len(chain[0])
+        nwalkers = len(chain)
+        for i in range(5):
+            params = chain[np.random.randint(nwalkers),nsteps-1]
+            gp.set_parameter_vector(params)
+            model.set_parameter_vector(params[-3:])
+            ymc = gp.sample_conditional(y,x)
+            aval = 10./nwalkers
+            #ymc, ymcvar = gp.predict(y, x, return_var=True)
+            #ymcstd = np.sqrt(ymcvar)
+            if not np.isnan(ymc).any():  
+                if labeled == False:
+                    ax.plot(x, ymc, 'm-', alpha = aval, label = "Posterior Samples")
+                    #plt.fill_between(x, ymc+ymcstd, ymc-ymcstd, color='g', alpha=0.1, edgecolor='none')
+                    labeled = True
+                else: 
+                    ax.plot(x, ymc, 'm-', alpha = aval)
+                    #plt.fill_between(x, ymc+ymcstd, ymc-ymcstd, color='g', alpha=0.1, edgecolor='none')
+                    
+def plot_post_subplot(ax, x, y, yerr, gp, params, fmt = 'g-', label = None, alpha = 1):
+    gp.set_parameter_vector(params)
+    gp.compute(x, yerr)
+    ymc = gp.sample_conditional(y,x)
+    ax.plot(x, ymc, 'm-', fmt, label = label, alpha = alpha)
+     
