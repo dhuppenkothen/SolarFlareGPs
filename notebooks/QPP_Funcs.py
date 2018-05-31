@@ -126,7 +126,7 @@ def optimize_gp(gp, y, verbose = False):
     #soln = minimize(neg_log_like, initial_params, jac=grad_neg_log_like, method="L-BFGS-B", args=(y, gp))
     if verbose:
         print("Final log-likelihood: {0}".format(-soln.fun))
-        print ("Optimized log-parameters: " + str(soln.x))
+        print("Optimized log-parameters: " + str(soln.x))
     return soln
 
 #produces a normally distributed collection of parameters to initialize sampler
@@ -156,15 +156,15 @@ def log_probability(params, y, gp):
 def sample_gp(paramstart, y, gp, nwalkers = 100, nsteps = 2000, burnin = 500, verbose = False):
     sampler = mc.EnsembleSampler(nwalkers, len(paramstart), log_probability, args=(y, gp))
     if verbose:
-        print "Burning in..."
+        print("Burning in...")
     p0 = paramstart + 1e-8 * np.random.randn(nwalkers, len(paramstart))
     p0, lp, _ = sampler.run_mcmc(p0, burnin)
     if verbose:
-        print "Sampling..."
+        print("Sampling...")
     sampler.reset()
     sampler.run_mcmc(p0, nsteps)
     if verbose:
-        print "Done!"
+        print("Done!")
     return sampler
 
 #plots time series of chain, given the chain directly extracted from emcee sampler object
