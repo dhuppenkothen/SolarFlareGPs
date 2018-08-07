@@ -5,26 +5,39 @@ import celerite as ce
 import emcee as mc
 import corner
 import h5py
+import dynesty
 import astropy.io
 from celerite.modeling import Model
 from scipy.optimize import minimize, curve_fit
 from astropy.io import fits
 from numpy import linalg
 from celerite.solver import LinAlgError
+from dynesty import utils as dyfunc
+from IPython.display import clear_output
 
+SHO_prior_bounds = [(np.log(1), np.log(1e7)),(np.log(2), np.log(20)), (2, 7)]
+CTSModel_prior_bounds  = [(np.log(1), np.log(1e7)), (np.log(1), np.log(1e4)), (np.log(1), np.log(1e7)), (-10, 10)]
+RealTerm_prior_bounds  = [(-20,20), (-20,10)]
+
+class RealTerm_Prior(ce.terms.RealTerm):
+    name = "RealTerm_Prior"
+    def log_prior(self):
+        prob_a = 1.
+        prob_c = 1.
 
 
 #defining model class
 class CTSModel_prior(Model):
     name="CTSModel_prior"
-    parameter_names = ("log_A", "log_tau1", "log_tau2")
+    parameter_names = ("log_A", "log_tau1", "log_tau2", "log_bkg")
  
     def get_value(self, t):
         A = np.exp(self.log_A)
         tau1 = np.exp(self.log_tau1)
         tau2 = np.exp(self.log_tau2)
         lam = np.exp(np.sqrt(2*np.exp(tau1/tau2)))
-        return A*lam*np.exp((-tau1/t)-(t/tau2))
+        bkg = np.exp(self.log_bkg)
+        return A*lam*np.exp((-tau1/t)-(t/tau2)) + bkg
     
     #the gradient terms were manually calculated
     def compute_gradient(self, t):
@@ -45,13 +58,17 @@ class CTSModel_prior(Model):
         probA = 1.
         probtau1 = 1.
         probtau2 = 1.
-        if not (self.log_A>1 and self.log_A<25): 
+        probbkg = 1.
+        prior = CTSModel_prior_bounds 
+        if not (self.log_A>prior[0][0] and self.log_A<prior[0][1]): 
             probA = 0.
-        if not ((self.log_tau1>1 and self.log_tau1<15)):
+        if not ((self.log_tau1>prior[1][0] and self.log_tau1<prior[1][1])):
             probtau1 = 0.
-        if not ((self.log_tau2>1 and self.log_tau2<15)):
+        if not ((self.log_tau2>prior[2][0] and self.log_tau2<prior[2][1])):
             probtau2 = 0.
-        return np.log(probA * probtau1 * probtau2 * np.e)
+        if not ((self.log_bkg>prior[3][0] and self.log_bkg<prior[3][1])):
+            probbkg = 0.
+        return np.log(probA * probtau1 * probtau2 * probbkg * np.e)
 
 #QPO term being redefined for our inclusion of priors
 class SHOTerm_Prior(ce.terms.SHOTerm):
@@ -61,13 +78,14 @@ class SHOTerm_Prior(ce.terms.SHOTerm):
         prob_S0 = 1.
         prob_Q = 1.
         prob_omega0 = 1.
+        prior = SHO_prior_bounds 
         
         #again, using simple (naive) tophat distributions
-        if not ((self.log_S0 > 0) and (self.log_S0 < 15)):
+        if not ((self.log_S0 > prior[0][0]) and (self.log_S0 < prior[0][1])):
             prob_S0 = 0.
-        if not (self.log_Q > 0 and self.log_Q < 10):
+        if not (self.log_Q > prior[1][0] and self.log_Q < prior[1][1]):
             prob_Q = 0.
-        if not (self.log_omega0 > np.log(1./4000.) and self.log_omega0 < np.log(np.pi)):
+        if not (self.log_omega0 > prior[2][0] and self.log_omega0 < prior[2][1]):
             prob_omega0 = 0.
         return np.log(prob_S0*prob_Q*prob_omega0 * np.e)
     
@@ -78,11 +96,11 @@ class RealTerm_Prior(ce.terms.RealTerm):
     def log_prior(self):
         prob_a = 1.
         prob_c = 1.
-     
+        prior = RealTerm_prior_bounds 
         #again, using simple (naive) tophat distributions
-        if not (self.log_a > -20):# and self.log_a < 20):
+        if not (self.log_a > prior[0][0] and self.log_a < prior[0][1]):
             prob_a = 0.
-        if not (self.log_c > -20 and self.log_c < 10):
+        if not (self.log_c > prior[1][0] and self.log_c < prior[1][1]):
             prob_c = 0.
         return np.log(prob_a*prob_c * np.e)
 
@@ -94,6 +112,11 @@ def simulate(x, model, kernel, noisy = False):
         y = np.random.poisson(y)
     return np.abs(y)
 
+
+#for dynesty, positive log likelihood function
+def log_like(params, y, gp):
+    gp.set_parameter_vector(params)
+    return gp.log_likelihood(y)
 
 #defining fitting functions for our GP (neg-log-like for minimization optimization)
 def neg_log_like(params, y, gp):
@@ -167,6 +190,31 @@ def sample_gp(paramstart, y, gp, nwalkers = 100, nsteps = 2000, burnin = 500, ve
         print("Done!")
     return sampler
 
+def make_prior_transform(prior_bounds):
+    def prior(prior_vec):
+        prior_transformed = np.empty(len(prior_vec))
+        for i in range(len(prior_vec)):
+            prior_transformed[i] = (prior_bounds[i][1] - prior_bounds[i][0]) * prior_vec[i] + prior_bounds[i][0]
+        return prior_transformed
+    return prior
+
+def make_loglike(y, gp):
+    def loglike(params):
+        gp.set_parameter_vector(params)
+        return gp.log_likelihood(y)
+    return loglike
+
+#sample GP but with Dynamic Sampling (Dynesty)
+def dynesty_sample_gp(ndim, loglike, prior_transform, nlive = 250):
+    sampler =  dynesty.DynamicNestedSampler(loglike, prior_transform, ndim,   nlive=nlive)
+    print "Sampling ..."
+    sampler.run_nested()
+    res = sampler.results
+    samples, weights = res.samples, np.exp(res.logwt-res.logz[-1])
+    chain = dyfunc.resample_equal(samples, weights)
+    return chain
+    
+
 #plots time series of chain, given the chain directly extracted from emcee sampler object
 def plot_chain(chain,  labels = None, burstid=None):
     flat_samples = chain[:,:,:].reshape((-1,len(chain[0,0])))
@@ -188,28 +236,31 @@ def plot_chain(chain,  labels = None, burstid=None):
     return fig
 
 #similarly plots corner of chain from chain object extracted from sampler object
-def plot_corner(chain, labels = None, truevals = None, burstid = None):
-    dim = len(chain[0,0])
+def plot_corner(chain, labels = None, truevals = None, burstid = None, flat = False):
     if labels==None:
         labels = str(np.arange(dim))
-    flat_samples = chain[:,:, :].reshape((-1,dim))
-
+    if flat==False:
+        flat_samples = chain[:,:, :].reshape((-1,dim))
+    else:
+        flat_samples = chain
+    dim = len(flat_samples[0])
+    
     maxparams = np.empty(dim)
+    bounds = []
     for i in range(dim):
         hist, bin_edges = np.histogram(flat_samples[:,i], bins = 50)
         maxindex = np.argmax(hist)
-
         maxparams[i] = np.average([bin_edges[maxindex], bin_edges[maxindex+1]])
+        bounds.append((np.average(flat_samples[:,i])-3*np.std(flat_samples[:,i]),np.average(flat_samples[:,i])+3*np.std(flat_samples[:,i])))
     if truevals == None:
-        fig = corner.corner(flat_samples, bins=50, labels = labels, truths = maxparams)
-    else:
-        fig = corner.corner(flat_samples, bins=50, labels = labels, truths = truevals)
-        if burstid!= None:
-            plt.suptitle("Chain Corner Plot for Burst " + str(burstid))
+        truevals = maxparams
+    fig = corner.corner(flat_samples, bins=50, labels = labels, truths = truevals, range=bounds)
+    if burstid!= None:
+        plt.suptitle("Chain Corner Plot for Burst " + str(burstid))
     return fig, maxparams
 
 #the multifunctional plot method for plotting lightcurves
-def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=[0], burstid = None):
+def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=[0], burstid = None, flat = False):
     init_params = gp.get_parameter_vector()
     fig = plt.figure()
     
@@ -226,20 +277,25 @@ def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=[0
     if(len(chain)!=1):
         #plots posterior samples
         labeled = False
-        nsteps = len(chain[0])
-        nwalkers = len(chain)
+        if flat == False:
+            nsteps = len(chain[0])
+            nwalkers = len(chain)
+        else:
+            nsteps = len(chain)
         for i in range(5):
-            params = chain[np.random.randint(nwalkers),nsteps-1]
+            if flat == False:
+                params = chain[np.random.randint(nwalkers),nsteps-1]
+            else:
+                params = chain[np.random.randint(nsteps-1)]
             gp.set_parameter_vector(params)
-            model.set_parameter_vector(params[-3:])
+            model.set_parameter_vector(params[-len(gp.mean.get_parameter_vector()):])
             ymc = gp.sample_conditional(y,x)
-            aval = 10./nwalkers
             if not np.isnan(ymc).any():  
                 if labeled == False:
-                    plt.plot(x, ymc, 'm-', alpha = aval, label = "Posterior Samples")
+                    plt.plot(x, ymc, 'm-', label = "Posterior Samples")
                     labeled = True
                 else: 
-                    plt.plot(x, ymc, 'm-', alpha = aval)
+                    plt.plot(x, ymc, 'm-')
     plt.legend()
     return fig
 
