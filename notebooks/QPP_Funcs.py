@@ -334,13 +334,16 @@ def trim_data(time, flux, cutoff = .05, buffer_ratio = 0.2):
     return time_trim, flux_trim
 
 #stores flare using h5py
-def store_flare(fname, header, t, I, optparams, chain):
+def store_flare(fname, header, t, I, optparams, chain, results):
     f = h5py.File(fname, "w")
     if not isinstance(header, str):
         stringhead = header.tostring()
     else:
         stringhead = header
+    
     chain_dset = f.create_dataset("chain", chain.shape, dtype = chain.dtype, data=chain)
+    results_dset = f.create_dataset("results", (100000,), dtype=h5py.special_dtype(vlen=str))
+    results_dset[0] = str(results)
     optparams_dset = f.create_dataset("optparams", optparams.shape, dtype = optparams.dtype, data=optparams)
     header_dset = f.create_dataset("header", (100,), dtype=h5py.special_dtype(vlen=str))
     header_dset[0] = stringhead
@@ -354,12 +357,13 @@ def load_flare(fname, astroheader=False):
     f = h5py.File(fname,"r")
     head_load = f['header']
     chain_load = f['chain']
+    results_load = f['results']
     flare_load = f['flare']
     optparams_load = f['optparams']
     if astroheader==True:
-        return astropy.io.fits.Header.fromstring(head_load[0]), flare_load[0,:], flare_load[1,:], optparams_load, chain_load
+        return astropy.io.fits.Header.fromstring(head_load[0]), flare_load[0,:], flare_load[1,:], optparams_load, chain_load, results_load[0]
     else:
-        return head_load[0], flare_load[0,:], flare_load[1,:], optparams_load, chain_load
+        return head_load[0], flare_load[0,:], flare_load[1,:], optparams_load, chain_load, results_load[0]
     f.close()
 
 #essentially a clone of plot_gp but takes a subplot as an input to more easily plot multiple lightcurves in the same figure
