@@ -5,6 +5,7 @@ import celerite as ce
 import emcee as mc
 import corner
 import h5py
+import os
 import dynesty
 import astropy.io
 from celerite.modeling import Model
@@ -207,7 +208,7 @@ def make_loglike(y, gp):
 #sample GP but with Dynamic Sampling (Dynesty)
 def dynesty_sample_gp(ndim, loglike, prior_transform, nlive = 250):
     sampler =  dynesty.DynamicNestedSampler(loglike, prior_transform, ndim,   nlive=nlive)
-    print "Sampling ..."
+    print ("Sampling ...")
     sampler.run_nested()
     res = sampler.results
     samples, weights = res.samples, np.exp(res.logwt-res.logz[-1])
@@ -260,7 +261,7 @@ def plot_corner(chain, labels = None, truevals = None, burstid = None, flat = Fa
     return fig, maxparams
 
 #the multifunctional plot method for plotting lightcurves
-def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=[0], burstid = None, flat = False):
+def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=None, burstid = None, flat = False):
     init_params = gp.get_parameter_vector()
     fig = plt.figure()
     
@@ -273,8 +274,7 @@ def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=[0
         #plots model prediction, given current GP parameters
         ytest = gp.mean.get_value(x)
         plt.plot(x, ytest, 'r--', label = label)
-       
-    if(len(chain)!=1):
+    if(chain!=None):
         #plots posterior samples
         labeled = False
         if flat == False:
@@ -385,8 +385,7 @@ def plot_post_subplot(ax, x, y, yerr, gp, params, fmt = 'g-', label = None, alph
     ymc = gp.sample_conditional(y,x)
     ax.plot(x, ymc, 'm-', fmt, label = label, alpha = alpha)
 
-def analyze_flare(loc, t, I, qpolabel = 'unnamed flare', trueparams = None)
-    loc, t, I, qpolabel = sys.argv[1:]
+def analyze_flare(loc, t, I, qpolabel = 'unnamed flare', trueparams = None):
     fname = loc + qpolabel + '/'
     if os.path.exists(fname):
             print("Exists at: " + fname)
@@ -395,8 +394,8 @@ def analyze_flare(loc, t, I, qpolabel = 'unnamed flare', trueparams = None)
     bound_vec1 = SHO_prior_bounds  + CTSModel_prior_bounds
     bound_vec2 = RealTerm_prior_bounds + CTSModel_prior_bounds
 
-    prior_transform1 = qpp.make_prior_transform(bound_vec1)
-    prior_transform2 = qpp.make_prior_transform(bound_vec2)
+    prior_transform1 = make_prior_transform(bound_vec1)
+    prior_transform2 = make_prior_transform(bound_vec2)
 
     qpoparams = [np.log(3), np.log(3), 3]
     realparams = [0., 0.] 
@@ -405,43 +404,43 @@ def analyze_flare(loc, t, I, qpolabel = 'unnamed flare', trueparams = None)
     ndim1 = len(bound_vec1)
     ndim2 = len(bound_vec2)
             
-    kernel1 = qpp.SHOTerm_Prior(log_S0 = qpoparams[0], log_Q = qpoparams[1], log_omega0 = qpoparams[2])
-    kernel2 = qpp.RealTerm_Prior(log_a = realparams[0], log_c = realparams[1])
+    kernel1 = SHOTerm_Prior(log_S0 = qpoparams[0], log_Q = qpoparams[1], log_omega0 = qpoparams[2])
+    kernel2 = RealTerm_Prior(log_a = realparams[0], log_c = realparams[1])
 
-    A_guess, t1_guess, t2_guess = qpp.initguess(t,I)
-    model = qpp.CTSModel_prior(log_A = np.log(A_guess), log_tau1 = np.log(t1_guess), log_tau2 = np.log(t2_guess), log_bkg = np.log(1000))
+    A_guess, t1_guess, t2_guess = initguess(t,I)
+    model = CTSModel_prior(log_A = np.log(A_guess), log_tau1 = np.log(t1_guess), log_tau2 = np.log(t2_guess), log_bkg = np.log(1000))
   
     gp1 = ce.GP(kernel1, mean=model, fit_mean=True)
     gp1.compute(t, np.sqrt(I))
-    initparams1 = gp.get_parameter_vector()
+    initparams1 = gp1.get_parameter_vector()
     
     gp2 = ce.GP(kernel2, mean=model, fit_mean=True)
     gp2.compute(t, np.sqrt(I))
-    initparams2 = gp.get_parameter_vector()
+    initparams2 = gp2.get_parameter_vector()
 
-    loglike1 = qpp.make_loglike(I, gp1)
-    loglike2 = qpp.make_loglike(I, gp2)
+    loglike1 = make_loglike(I, gp1)
+    loglike2 = make_loglike(I, gp2)
 
-    soln1 = qpp.optimize_gp(gp1, I)
+    soln1 = optimize_gp(gp1, I)
     gp1.set_parameter_vector(soln1.x)
-    figopt1 = qpp.plot_gp(t, I, np.sqrt(I), gp1, model, predict=True, label = "Optimized fit QPO", flat=True)
+    figopt1 = plot_gp(t, I, np.sqrt(I), gp1, model, predict=True, label = "Optimized fit QPO", flat=True)
 
-    soln2 = qpp.optimize_gp(gp2, I)
+    soln2 = optimize_gp(gp2, I)
     gp2.set_parameter_vector(soln2.x)
-    figopt2 = qpp.plot_gp(t, I, np.sqrt(I), gp2, model, predict=True, label = "Optimized fit No QPO", flat=True)
+    figopt2 = plot_gp(t, I, np.sqrt(I), gp2, model, predict=True, label = "Optimized fit No QPO", flat=True)
     
     sampler1 =  dynesty.DynamicNestedSampler(loglike1, prior_transform1, ndim1, bound="multi", sample="rwalk", nlive=1000)
     sampler2 =  dynesty.DynamicNestedSampler(loglike2, prior_transform2, ndim2, bound="multi", sample="rwalk", nlive=1000)
 
 
-    print "Sampling QPO ..."
+    print ("Sampling QPO ...")
     sampler1.run_nested()
     res1 = sampler1.results
     bayesfac1 = res1.logz[-1:]
     samples1, weights1 = res1.samples, np.exp(res1.logwt-res1.logz[-1])
     chain1 = dyfunc.resample_equal(samples1, weights1)
 
-    print "Sampling No QPO ..."
+    print ("Sampling No QPO ...")
     sampler2.run_nested()
     res2 = sampler2.results
     bayesfac2 = res2.logz[-1:]
@@ -450,26 +449,28 @@ def analyze_flare(loc, t, I, qpolabel = 'unnamed flare', trueparams = None)
     
 
 
-    #figsam = qpp.plot_chain(chain, labels = gp.get_parameter_names(), burstid = qpolabel, flat=True)
+    #figsam = plot_chain(chain, labels = gp.get_parameter_names(), burstid = qpolabel, flat=True)
 
     try:
-        figoptsam1 = qpp.plot_gp(t, I, np.sqrt(I), gp1, model, chain=chain, burstid = qpolabel, predict=True, flat=True)
+        figoptsam1 = plot_gp(t, I, np.sqrt(I), gp1, model, chain=chain1, burstid = qpolabel, predict=True, flat=True)
     except LinAlgError:
-        figoptsam1 = qpp.plot_gp(t, I, np.sqrt(I), gp1, model, chain=chain, burstid = qpolabel, predict=True, flat=True)
+        figoptsam1 = plot_gp(t, I, np.sqrt(I), gp1, model, chain=chain1, burstid = qpolabel, predict=True, flat=True)
 
     try:
-        figoptsam2 = qpp.plot_gp(t, I, np.sqrt(I), gp2, model, chain=chain2, burstid = qpolabel, predict=True, flat=True)
+        figoptsam2 = plot_gp(t, I, np.sqrt(I), gp2, model, chain=chain2, burstid = qpolabel, predict=True, flat=True)
     except LinAlgError:
-        figoptsam2 = qpp.plot_gp(t, I, np.sqrt(I), gp2, model, chain=chain2, burstid = qpolabel, predict=True, flat=True)
+        figoptsam2 = plot_gp(t, I, np.sqrt(I), gp2, model, chain=chain2, burstid = qpolabel, predict=True, flat=True)
 
         
         
-    figcorner1, maxparams1 = qpp.plot_corner(chain1, labels = gp1.get_parameter_names(), burstid = qpolabel, flat=True)
-    figcorner2, maxparams2 = qpp.plot_corner(chain2, labels = gp2.get_parameter_names(), burstid = qpolabel, flat=True)
+    figcorner1, maxparams1 = plot_corner(chain1, labels = gp1.get_parameter_names(), burstid = qpolabel, flat=True)
+    figcorner2, maxparams2 = plot_corner(chain2, labels = gp2.get_parameter_names(), burstid = qpolabel, flat=True)
     bayesresult = bayesfac1-bayesfac2
 
-    header = "Rednoise Kernel Params: \t"+str(realparams) + "\nQPO Params: \t" + str(qpoparams) + "\nEnvelope Params \t" + str(modelparams) + "\nTrue Parameter Vector: \t" + "\nBayes Factor: \t" + str(bayesresult)
-    
+    header1 = "QPO Params: \t" + str(qpoparams) + "\nEnvelope Params \t" + str(modelparams) + "\nTrue Parameter Vector: \t" + "\nBayes Factor: \t" + str(bayesresult)
+    header2 = "Rednoise Kernel Params: \t"+str(realparams) +  "\nEnvelope Params \t" + str(modelparams) + "\nTrue Parameter Vector: \t" + "\nBayes Factor: \t" + str(bayesresult)
+
+
     if trueparams!=None:
         header += '\nTrue Params: ' + str(trueparams)
 
@@ -477,11 +478,11 @@ def analyze_flare(loc, t, I, qpolabel = 'unnamed flare', trueparams = None)
     if not os.path.exists(fname):
         os.makedirs(fname)
         
-        qpp.store_flare(fname+"data1", header, t, I, soln1.x, chain1, res1)
+        store_flare(fname+"data1", header, t, I, soln1.x, chain1, res1)
         figoptsam1.savefig(fname+"lc_plot1.png")
         figcorner1.savefig(fname+"chain_corner1.png")
         
-        qpp.store_flare(fname+"data2", header, t, I, soln2.x, chain2, res2)
+        store_flare(fname+"data2", header, t, I, soln2.x, chain2, res2)
         figoptsam2.savefig(fname+"lc_plot2.png")
         figcorner2.savefig(fname+"chain_corner2.png")
         
@@ -490,5 +491,5 @@ def analyze_flare(loc, t, I, qpolabel = 'unnamed flare', trueparams = None)
         textheader.write(header)
         textheader.close()
     else:
-        print "directory exists"
+        print ("directory exists")
      
