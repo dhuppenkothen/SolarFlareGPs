@@ -207,7 +207,7 @@ def make_loglike(y, gp):
 #sample GP but with Dynamic Sampling (Dynesty)
 def dynesty_sample_gp(ndim, loglike, prior_transform, nlive = 250):
     sampler =  dynesty.DynamicNestedSampler(loglike, prior_transform, ndim,   nlive=nlive)
-    print "Sampling ..."
+    print("Sampling ...")
     sampler.run_nested()
     res = sampler.results
     samples, weights = res.samples, np.exp(res.logwt-res.logz[-1])
@@ -434,14 +434,14 @@ def analyze_flare(loc, t, I, qpolabel = 'unnamed flare', trueparams = None)
     sampler2 =  dynesty.DynamicNestedSampler(loglike2, prior_transform2, ndim2, bound="multi", sample="rwalk", nlive=1000)
 
 
-    print "Sampling QPO ..."
+    print("Sampling QPO ...")
     sampler1.run_nested()
     res1 = sampler1.results
     bayesfac1 = res1.logz[-1:]
     samples1, weights1 = res1.samples, np.exp(res1.logwt-res1.logz[-1])
     chain1 = dyfunc.resample_equal(samples1, weights1)
 
-    print "Sampling No QPO ..."
+    print("Sampling No QPO ...")
     sampler2.run_nested()
     res2 = sampler2.results
     bayesfac2 = res2.logz[-1:]
@@ -490,5 +490,5 @@ def analyze_flare(loc, t, I, qpolabel = 'unnamed flare', trueparams = None)
         textheader.write(header)
         textheader.close()
     else:
-        print "directory exists"
+        print("directory exists")
      
