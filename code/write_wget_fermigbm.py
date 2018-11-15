@@ -70,7 +70,7 @@ def make_wget_list(catdf, filename="fermigbmcat_wget.dat", datapath="./"):
     f = open(datapath + filename, "w")
 
     for d in unique_date:
-        if d[:2] == "08":
+        if d[:2] == "10":
     
             year = d[:2]
             month = d[2:4]
