@@ -11,9 +11,9 @@
   
 module purge
 module load anaconda3/4.3.1
-source activate py2.7
+source activate py27
 
 #s0, Q are parameters sent here
 #outdir="/scratch/ci411/Data/Simulating/${rundate}/simulated_burst_s0${s0}_Q${Q}"
-python /home/ci411/scripts/simulation_script.py $rundate $s0 $Q
+python /home/ci411/QPP/SolarFlareGPs/scripts/simulation_script.py $rundate $s0 $Q
 
