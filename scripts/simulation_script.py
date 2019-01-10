@@ -19,13 +19,14 @@ import sys
 
 
 if __name__=='__main__':
-	datelabel, s0, q = sys.arv[1:]
-	fname = "/scratch/ci411/Data/Simulating/" + datelabel + "simulated_burst_s0"+str(s0) + "Q" + str(Q)
-	qpoparams = [np.log(1.1), np.log(2.1), 3]
+    datelabel, s0, q = sys.arv[1:]
+    fname = "/scratch/ci411/Data/Simulating/" + datelabel + "simulated_burst_s0"+str(s0) + "Q" + str(Q)
+    qpoparams = [np.log(1.1), np.log(2.1), 3]
 
-	if os.path.exists(fname):
+    if os.path.exists(fname):
             print("Exists at: " + fname)
             continue
+
     print("Running S: " + str(s0) + "\tQ: "+ str(qq)  +"\nSaving at: " + fname + '\n')
     qpoparams = [s0, q, 3]
     #realparams = [-.13, -1.4] 
@@ -35,7 +36,7 @@ if __name__=='__main__':
     #ndim2 = len(bound_vec2)
             
     model = qpp.CTSModel_prior(log_A = modelparams[0], log_tau1 = modelparams[1], log_tau2 = modelparams[2], log_bkg = modelparams[3])
-  	kernel1 = qpp.SHOTerm_Prior(log_S0 = qpoparams[0], log_Q = qpoparams[1], log_omega0 = qpoparams[2])
+    	kernel1 = qpp.SHOTerm_Prior(log_S0 = qpoparams[0], log_Q = qpoparams[1], log_omega0 = qpoparams[2])
     #kernel2 = qpp.RealTerm_Prior(log_a = realparams[0], log_c = realparams[1])
     kernel = kernel1
 
@@ -52,7 +53,7 @@ if __name__=='__main__':
     gp = ce.GP(kernel, mean=model, fit_mean=True)
     gp.compute(t, np.sqrt(I))
     initparams = gp.get_parameter_vector()
-    
+
     gp2 = ce.GP(kernel2, mean=model, fit_mean=True)
     gp2.compute(t, np.sqrt(I))
     initparams2 = gp.get_parameter_vector()
@@ -67,7 +68,7 @@ if __name__=='__main__':
     soln2 = qpp.optimize_gp(gp2, I)
     gp2.set_parameter_vector(soln2.x)
     figopt2 = qpp.plot_gp(t, I, np.sqrt(I), gp2, model, predict=True, label = "Optimized fit", flat=True)
-    
+
     sampler =  dynesty.DynamicNestedSampler(loglike, prior_transform, ndim, bound="multi", sample="rwalk", nlive=1000)
     sampler2 =  dynesty.DynamicNestedSampler(loglike2, prior_transform2, ndim2, bound="multi", sample="rwalk", nlive=1000)
 
@@ -77,7 +78,7 @@ if __name__=='__main__':
     bayesfac2 = res2.logz[-1:]
     samples2, weights2 = res2.samples, np.exp(res2.logwt-res2.logz[-1])
     chain2 = dyfunc.resample_equal(samples2, weights2)
-    
+
     print "Sampling1 ..."
     sampler.run_nested()
     res = sampler.results
@@ -97,7 +98,6 @@ if __name__=='__main__':
     except LinAlgError:
         figoptsam2 = qpp.plot_gp(t, I, np.sqrt(I), gp2, model, chain=chain2, burstid = qpolabel, predict=True, flat=True)
 
-        
         
     figcorner, maxparams = qpp.plot_corner(chain, labels = gp.get_parameter_names(), truevals = trueparams, burstid = qpolabel, flat=True)
     figcorner2, maxparams2 = qpp.plot_corner(chain2, labels = gp2.get_parameter_names(), burstid = qpolabel, flat=True)
