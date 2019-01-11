@@ -20,6 +20,18 @@ import sys
 load_src("QPP_Funcs", "../notebooks/QPP_Funcs.py")
 import QPP_Funcs as qpp
 
+
+
+SHO_prior_bounds  = [(np.log(1), np.log(1e7)),(np.log(2), np.log(20)), (2, 7)]
+CTSModel_prior_bounds  = [(np.log(1), np.log(1e7)), (np.log(1), np.log(1e4)), (np.log(1), np.log(1e7)), (-10, 10)]
+RealTerm_prior_bounds  = [(-20,20), (-20,10)]
+
+bound_vec = SHO_prior_bounds  + CTSModel_prior_bounds
+bound_vec2 = RealTerm_prior_bounds + CTSModel_prior_bounds
+prior_transform = qpp.make_prior_transform(bound_vec)
+prior_transform2 = qpp.make_prior_transform(bound_vec2)
+
+
 if __name__=='__main__':
     datelabel, s0, q = sys.argv[1:]
     fname = "/scratch/ci411/Data/Simulating/" + datelabel + "/simulated_burst_s0"+str(s0) + "Q" + str(q)

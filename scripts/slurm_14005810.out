@@ -1,4 +1,0 @@
-  File "/home/ci411/QPP/SolarFlareGPs/scripts/simulation_script.py", line 29
-    print("Running S: " + str(s0) + "\tQ: "+ str(qq)  +"\nSaving at: " + fname + '\n')
-                                                                                     ^
-IndentationError: unindent does not match any outer indentation level
