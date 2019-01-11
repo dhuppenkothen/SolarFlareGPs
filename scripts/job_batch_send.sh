@@ -1,7 +1,7 @@
 !#/bin/bash
-rundate="011019"
+rundate="test"
 s0s=(10)
-Qs=(5) 
+Qs=(1.5) 
 
 for s0 in ${s0s[@]}
 	do

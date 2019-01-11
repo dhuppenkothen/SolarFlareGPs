@@ -11,6 +11,7 @@
   
 module purge
 module load anaconda3/4.3.1
+module load intel/17.0.1
 source activate py2.7
 
 #s0, Q are parameters sent here

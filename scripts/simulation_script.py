@@ -3,13 +3,13 @@ def load_src(name, fpath):
     import os, imp
     return imp.load_source(name, os.path.join(os.path.dirname('__file__'), fpath))
 
-load_src("QPP_Funcs", "../QPP_Funcs.py")
 
 import numpy as np
 import scipy as sp
 from scipy import signal
-import matplotlib.pyplot as plt
-import QPP_Funcs as qpp
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot as plt
 import celerite as ce
 import os
 from celerite.solver import LinAlgError
@@ -17,17 +17,18 @@ import dynesty
 from dynesty import utils as dyfunc
 import sys
 
+load_src("QPP_Funcs", "../notebooks/QPP_Funcs.py")
+import QPP_Funcs as qpp
 
 if __name__=='__main__':
-    datelabel, s0, q = sys.arv[1:]
-    fname = "/scratch/ci411/Data/Simulating/" + datelabel + "simulated_burst_s0"+str(s0) + "Q" + str(Q)
+    datelabel, s0, q = sys.argv[1:]
+    fname = "/scratch/ci411/Data/Simulating/" + datelabel + "/simulated_burst_s0"+str(s0) + "Q" + str(q)
     qpoparams = [np.log(1.1), np.log(2.1), 3]
 
     if os.path.exists(fname):
-            print("Exists at: " + fname)
-            continue
-
-    print("Running S: " + str(s0) + "\tQ: "+ str(qq)  +"\nSaving at: " + fname + '\n')
+        print("Exists at: " + fname)
+        sys.exit()
+    print("Running S: " + str(s0) + "\tQ: "+ str(q)  +"\nSaving at: " + fname + '\n')
     qpoparams = [s0, q, 3]
     #realparams = [-.13, -1.4] 
     modelparams = [11.33844804, 6.92311406, 6.85207764, np.log(1000)]
@@ -36,7 +37,7 @@ if __name__=='__main__':
     #ndim2 = len(bound_vec2)
             
     model = qpp.CTSModel_prior(log_A = modelparams[0], log_tau1 = modelparams[1], log_tau2 = modelparams[2], log_bkg = modelparams[3])
-    	kernel1 = qpp.SHOTerm_Prior(log_S0 = qpoparams[0], log_Q = qpoparams[1], log_omega0 = qpoparams[2])
+    kernel1 = qpp.SHOTerm_Prior(log_S0 = qpoparams[0], log_Q = qpoparams[1], log_omega0 = qpoparams[2])
     #kernel2 = qpp.RealTerm_Prior(log_a = realparams[0], log_c = realparams[1])
     kernel = kernel1
 
