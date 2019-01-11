@@ -42,11 +42,11 @@ if __name__=='__main__':
         sys.exit()
     print("Running S: " + str(s0) + "\tQ: "+ str(q)  +"\nSaving at: " + fname + '\n')
     qpoparams = [s0, q, 3]
-    #realparams = [-.13, -1.4] 
+    realparams = [-.13, -1.4] 
     modelparams = [11.33844804, 6.92311406, 6.85207764, np.log(1000)]
     trueparams = qpoparams + modelparams
     ndim = len(trueparams)
-    #ndim2 = len(bound_vec2)
+    ndim2 = len(bound_vec2)
             
     model = qpp.CTSModel_prior(log_A = modelparams[0], log_tau1 = modelparams[1], log_tau2 = modelparams[2], log_bkg = modelparams[3])
     kernel1 = qpp.SHOTerm_Prior(log_S0 = qpoparams[0], log_Q = qpoparams[1], log_omega0 = qpoparams[2])
