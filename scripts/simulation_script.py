@@ -22,7 +22,7 @@ import QPP_Funcs as qpp
 
 
 
-SHO_prior_bounds  = [(np.log(1), np.log(1e7)),(np.log(2), np.log(20)), (2, 7)]
+SHO_prior_bounds  = [(np.log(0), np.log(1e7)),(np.log(0), np.log(20)), (2, 7)]
 CTSModel_prior_bounds  = [(np.log(1), np.log(1e7)), (np.log(1), np.log(1e4)), (np.log(1), np.log(1e7)), (-10, 10)]
 RealTerm_prior_bounds  = [(-20,20), (-20,10)]
 
@@ -34,20 +34,21 @@ prior_transform2 = qpp.make_prior_transform(bound_vec2)
 
 if __name__=='__main__':
     datelabel, s0, q = sys.argv[1:]
-    fname = "/scratch/ci411/Data/Simulating/" + datelabel + "/simulated_burst_s0"+str(s0) + "Q" + str(q)
-    qpoparams = [np.log(1.1), np.log(2.1), 3]
-
+    s0 = float(s0)
+    q = float(q)
+    qpolabel = "simulated_burst_s0" + str(s0) + "_Q" + str(q)
+    fname = "/scratch/ci411/Data/Simulating/" + datelabel + "/" + qpolabel
     if os.path.exists(fname):
         print("Exists at: " + fname)
         sys.exit()
     print("Running S: " + str(s0) + "\tQ: "+ str(q)  +"\nSaving at: " + fname + '\n')
+    print(s0*q)
     qpoparams = [s0, q, 3]
     realparams = [-.13, -1.4] 
     modelparams = [11.33844804, 6.92311406, 6.85207764, np.log(1000)]
     trueparams = qpoparams + modelparams
     ndim = len(trueparams)
     ndim2 = len(bound_vec2)
-            
     model = qpp.CTSModel_prior(log_A = modelparams[0], log_tau1 = modelparams[1], log_tau2 = modelparams[2], log_bkg = modelparams[3])
     kernel1 = qpp.SHOTerm_Prior(log_S0 = qpoparams[0], log_Q = qpoparams[1], log_omega0 = qpoparams[2])
     #kernel2 = qpp.RealTerm_Prior(log_a = realparams[0], log_c = realparams[1])
@@ -82,8 +83,15 @@ if __name__=='__main__':
     gp2.set_parameter_vector(soln2.x)
     figopt2 = qpp.plot_gp(t, I, np.sqrt(I), gp2, model, predict=True, label = "Optimized fit", flat=True)
 
-    sampler =  dynesty.DynamicNestedSampler(loglike, prior_transform, ndim, bound="multi", sample="rwalk", nlive=1000)
-    sampler2 =  dynesty.DynamicNestedSampler(loglike2, prior_transform2, ndim2, bound="multi", sample="rwalk", nlive=1000)
+    sampler =  dynesty.DynamicNestedSampler(loglike, prior_transform, ndim, sample="rwalk", nlive=1000)
+    sampler2 =  dynesty.DynamicNestedSampler(loglike2, prior_transform2, ndim2, sample="rwalk", nlive=1000)
+
+    print "Sampling1 ..."
+    sampler.run_nested()
+    res = sampler.results
+    bayesfac = res.logz[-1:]
+    samples, weights = res.samples, np.exp(res.logwt-res.logz[-1])
+    chain = dyfunc.resample_equal(samples, weights)
 
     print "Sampling2 ..."
     sampler2.run_nested()
@@ -92,12 +100,6 @@ if __name__=='__main__':
     samples2, weights2 = res2.samples, np.exp(res2.logwt-res2.logz[-1])
     chain2 = dyfunc.resample_equal(samples2, weights2)
 
-    print "Sampling1 ..."
-    sampler.run_nested()
-    res = sampler.results
-    bayesfac = res.logz[-1:]
-    samples, weights = res.samples, np.exp(res.logwt-res.logz[-1])
-    chain = dyfunc.resample_equal(samples, weights)
 
     #figsam = qpp.plot_chain(chain, labels = gp.get_parameter_names(), burstid = qpolabel, flat=True)
 
@@ -117,7 +119,6 @@ if __name__=='__main__':
     bayesresult = bayesfac-bayesfac2
 
     header = "Rednoise Kernel Params: \t"+str(realparams) + "\nQPO Params: \t" + str(qpoparams) + "\nEnvelope Params \t" + str(modelparams) + "\nTrue Parameter Vector: \t" + str(trueparams) + "\nMaxParams: \t" + str(maxparams) + "\nBayes Factor: \t" + str(bayesresult)
-    fname = loc + qpolabel+"/"
 
     if not os.path.exists(fname):
         os.makedirs(fname)
