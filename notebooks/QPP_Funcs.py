@@ -16,7 +16,7 @@ from celerite.solver import LinAlgError
 from dynesty import utils as dyfunc
 from IPython.display import clear_output
 
-SHO_prior_bounds  = [(np.log(1), np.log(1e7)),(np.log(2), np.log(20)), (2, 7)]
+SHO_prior_bounds  = [(np.log(0), np.log(1e7)),(np.log(0), np.log(20)), (-10, 0)]
 CTSModel_prior_bounds  = [(np.log(1), np.log(1e7)), (np.log(1), np.log(1e4)), (np.log(1), np.log(1e7)), (-10, 10)]
 RealTerm_prior_bounds  = [(-20,20), (-20,10)]
 
@@ -261,7 +261,7 @@ def plot_corner(chain, labels = None, truevals = None, burstid = None, flat = Fa
     return fig, maxparams
 
 #the multifunctional plot method for plotting lightcurves
-def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=None, burstid = None, flat = False):
+def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=[], burstid = None, flat = False):
     init_params = gp.get_parameter_vector()
     fig = plt.figure()
     
@@ -274,7 +274,7 @@ def plot_gp(x, y, yerr, gp, model, label = "Prediction", predict=False, chain=No
         #plots model prediction, given current GP parameters
         ytest = gp.mean.get_value(x)
         plt.plot(x, ytest, 'r--', label = label)
-    if(chain!=None):
+    if(len(chain)>1):
         #plots posterior samples
         labeled = False
         if flat == False:
