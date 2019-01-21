@@ -22,7 +22,7 @@ import QPP_Funcs as qpp
 
 
 
-SHO_prior_bounds  = [(np.log(1), np.log(1e7)),(np.log(2), np.log(20)), (-10, 0)]
+SHO_prior_bounds  = [(np.log(1), np.log(1e9)),(np.log(2), np.log(20)), (-10, 0)]
 CTSModel_prior_bounds  = [(np.log(1), np.log(1e7)), (np.log(1), np.log(1e4)), (np.log(1), np.log(1e7)), (-10, 10)]
 RealTerm_prior_bounds  = [(-20,20), (-20,10)]
 
@@ -43,7 +43,7 @@ if __name__=='__main__':
         sys.exit()
     print("Running S: " + str(s0) + "\tQ: "+ str(q)  +"\nSaving at: " + fname + '\n')
     print(s0*q)
-    qpoparams = [s0, q, -6]
+    qpoparams = [s0, q, -4]
     realparams = [-.13, -1.4] 
     modelparams = [11.33844804, 6.92311406, 6.85207764, np.log(1000)]
     trueparams = qpoparams + modelparams
@@ -61,7 +61,7 @@ if __name__=='__main__':
 
     A_guess, t1_guess, t2_guess = qpp.initguess(t,I)
     model = qpp.CTSModel_prior(log_A = np.log(A_guess), log_tau1 = np.log(t1_guess), log_tau2 = np.log(t2_guess), log_bkg = np.log(1000))
-    kernel1 = qpp.SHOTerm_Prior(log_S0 = np.log(3), log_Q = np.log(3), log_omega0 = 3) #write guesser for kernel parameters
+    kernel1 = qpp.SHOTerm_Prior(log_S0 = np.log(3), log_Q = np.log(3), log_omega0 = -6) #write guesser for kernel parameters
     kernel2 = qpp.RealTerm_Prior(log_a=0., log_c=0.) #write guesser for kernel parameters
     kernel = kernel1
     gp = ce.GP(kernel, mean=model, fit_mean=True)

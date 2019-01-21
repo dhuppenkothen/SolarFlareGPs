@@ -16,7 +16,7 @@ from celerite.solver import LinAlgError
 from dynesty import utils as dyfunc
 from IPython.display import clear_output
 
-SHO_prior_bounds  = [(np.log(0), np.log(1e7)),(np.log(0), np.log(20)), (-10, 0)]
+SHO_prior_bounds  = [(np.log(0), np.log(1e9)),(np.log(0), np.log(20)), (-10, 0)]
 CTSModel_prior_bounds  = [(np.log(1), np.log(1e7)), (np.log(1), np.log(1e4)), (np.log(1), np.log(1e7)), (-10, 10)]
 RealTerm_prior_bounds  = [(-20,20), (-20,10)]
 
