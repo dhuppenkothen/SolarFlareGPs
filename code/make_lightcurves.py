@@ -67,8 +67,6 @@ def read_fermi_gbm_file(filename, tstart, duration, emin=10, emax=30, add_second
 
     return tnew, cnew
 
-
-
 def convert_hours_seconds(time):
     """
     Convert a HH:MM:SS string into 
@@ -323,7 +321,28 @@ def make_lightcurve(date, tstart, duration, detecs, emin=10, emax=30, add_second
 
 
 def write_all_lightcurves(catfile, emin=10, emax=30, add_seconds=20, resolution=1.0):
+    """
+    Take a catalogue file and write out light curves for all bursts in that 
+    catalogue.
 
+    Parameters
+    ----------
+    catfile : str
+        The path and file name for the catalogue file
+
+    emin, emax : float
+        Minimum and maximum energy to consider, in keV
+
+    add_seconds: int
+        The number of seconds to add on either end of the Fermi/GBM burst start/end times
+        Note: we should add some time on either side, because Fermi/GBM is not designed 
+        for solar flares and tends to miss the start/end of the flare
+
+    resolution : float
+        The time resolution of the output light curve. Must be > 0.256 seconds, which 
+        is the resolution of Fermi/GBM CTIME data.
+
+    """
     catdf = read_catalogue(catfile)
 
     nflares = len(catdf.index)
