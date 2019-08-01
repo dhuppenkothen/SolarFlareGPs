@@ -4,6 +4,25 @@ import numpy as np
 import pandas as pd
 
 def read_catalogue(filename, datapath="./"):
+    """ 
+    Read in the Fermi/GBM solar flare catalogue and return 
+    entries in a useful pandas DataFrame format.
+
+    Parameters
+    ----------
+    filename : str
+        Name of the Fermi/GBM catalogue file
+
+    datapath : str
+        path to the directory with the Fermi/GBM catalogue file
+
+    Returns
+    -------
+    catdf : pandas.DataFrame
+        A pandas.DataFrame with the catalogue data
+
+    """
+
     # read in the catalogue
     catfile = open(datapath + filename, "r")
     catlines = catfile.readlines()
@@ -62,6 +81,25 @@ def read_catalogue(filename, datapath="./"):
     return catdf
       
 def make_wget_list(catdf, filename="fermigbmcat_wget.dat", datapath="./"):
+    """
+    Take the Fermi/GBM catalogue and make a list of wget commands that 
+    will download the relevant files for all bursts. Then save those wget 
+    commands in an .sh file that one can run from the command line.
+
+    Parameters
+    ---------
+    catdf : pandas.DataFrame
+        A pandas.DataFrame with the Fermi/GBM solar flare catalogue data
+
+    filename : str
+        The filename of the output file to store the wget commands in
+
+    datapath : str
+        The path to the directory where the file with the wget commands 
+        will be stored
+
+    """
+
 
     date = np.array(catdf["date"])
     unique_date = np.unique(date)
@@ -93,16 +131,22 @@ def make_wget_list(catdf, filename="fermigbmcat_wget.dat", datapath="./"):
     return
 
 if __name__ == "__main__":
+
+    # set up command-line argument parsing
     parser = argparse.ArgumentParser(description="Download a bunch of Fermi/GBM light curves.")
 
     parser.add_argument("-c", "--catfile", action="store", dest="catfile", required=True, help="The filename of the catalogue file,")
     parser.add_argument("-o", "--outfile", action="store", dest="outfile", required=False, default="fermigbmcat_wget.dat", help="The name for the output file")
     parser.add_argument("-p", "--path", action="store", dest="datapath", required=False, default="./", help="The path to the data directory.")
 
+    # parse the arguments and store in variables
     clargs = parser.parse_args()
     catfile = clargs.catfile
     outfile = clargs.outfile
     datapath = clargs.datapath
 
+    # read out the catalogue from file
     catdf = read_catalogue(catfile, datapath)
+
+    # set up the wget commands for downloading the data
     make_wget_list(catdf, outfile, datapath) 
