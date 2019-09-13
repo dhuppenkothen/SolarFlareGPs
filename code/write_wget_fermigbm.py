@@ -34,8 +34,8 @@ def read_catalogue(filename, datapath="./"):
                "det1": [], "det2":[], "det3":[], "det4":[], "trigname":[], "rhessi":[]} 
     # run through all lines except for the first one
     # which contains the headers    
-    for i,c in enumerate(catlines[1:]):
-        i += 1
+    for i,c in enumerate(catlines):
+        #i += 1
         # split by spaces
         # need to do this because there are variable spaces
         # between columns and a variable number of columns
@@ -108,24 +108,21 @@ def make_wget_list(catdf, filename="fermigbmcat_wget.dat", datapath="./"):
     f = open(datapath + filename, "w")
 
     for d in unique_date:
-        if d[:2] == "10":
+ 
+        year = d[:2]
+        month = d[2:4]
+        day = d[4:]
     
-            year = d[:2]
-            month = d[2:4]
-            day = d[4:]
-        
-            b_detecs = []
-            for i,t in enumerate(date):
-               if d in t:
-                   det = detecs[i]
-                   b_detecs.extend(det)
-        
-            b_detecs = np.unique(np.array(b_detecs))
+        b_detecs = []
+        for i,t in enumerate(date):
+           if d in t:
+               det = detecs[i]
+               b_detecs.extend(det)
     
-            for b in b_detecs:
-                f.write("wget heasarc.gsfc.nasa.gov:/fermi/data/gbm/daily/20%s/%s/%s/current/*ctime*%s* \n"%(year, month, day, b))
-        else:
-            continue 
+        b_detecs = np.unique(np.array(b_detecs))
+ 
+        for b in b_detecs:
+            f.write("wget heasarc.gsfc.nasa.gov:/fermi/data/gbm/daily/20%s/%s/%s/current/*ctime*%s* -P %s \n"%(year, month, day, b, datapath))
     f.close()
 
     return

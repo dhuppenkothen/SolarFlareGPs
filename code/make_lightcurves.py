@@ -38,7 +38,7 @@ def read_fermi_gbm_file(filename, tstart, duration, emin=10, emax=30, add_second
 
     """
     hdulist = fits.open(filename)
-
+ 
     # get out channel-to-energy conversion
     channel = hdulist[1].data.field("CHANNEL")
     e_min_channel = hdulist[1].data.field("E_MIN")
@@ -247,8 +247,7 @@ def make_lightcurve(date, tstart, duration, detecs, emin=10, emax=30, add_second
     d1 = detecs[0]
 
     f = glob.glob(datadir+"glg_ctime_%s_%s_*.pha"%(d1, date))
-
-    
+    print(datadir) 
     hdulist = fits.open(f[0])
     
     obs_start_met = hdulist[0].header["TSTART"]
@@ -313,14 +312,14 @@ def make_lightcurve(date, tstart, duration, detecs, emin=10, emax=30, add_second
     # sort of hacky uncertainty on the countrate
     cerr = np.sqrt(cbinrate)
 
-    outfile = "%s_%f_lc.dat"%(date, tstart_met)
+    outfile = "%s%s_%f_%ito%ikeV_lc.dat"%(datadir, date, tstart_met, int(emin), int(emax))
 
     np.savetxt(outfile, np.array([tbin, cbinrate, cerr]).T)
 
     return
 
 
-def write_all_lightcurves(catfile, emin=10, emax=30, add_seconds=20, resolution=1.0):
+def write_all_lightcurves(catfile, emin=10, emax=30, add_seconds=20, resolution=1.0, datadir="./"):
     """
     Take a catalogue file and write out light curves for all bursts in that 
     catalogue.
@@ -343,7 +342,7 @@ def write_all_lightcurves(catfile, emin=10, emax=30, add_seconds=20, resolution=
         is the resolution of Fermi/GBM CTIME data.
 
     """
-    catdf = read_catalogue(catfile)
+    catdf = read_catalogue(datadir+catfile)
 
     nflares = len(catdf.index)
 
@@ -354,7 +353,8 @@ def write_all_lightcurves(catfile, emin=10, emax=30, add_seconds=20, resolution=
         duration = catdf.loc[i, "duration"]
         detecs = [catdf.loc[i, "det1"],catdf.loc[i, "det2"],catdf.loc[i, "det3"],catdf.loc[i, "det4"]]
 
-        make_lightcurve(date, tstart, duration, detecs, emin=emin, emax=emax, add_seconds=add_seconds, resolution=resolution)
+        make_lightcurve(date, tstart, duration, detecs, emin=emin, emax=emax, 
+                        add_seconds=add_seconds, resolution=resolution, datadir=datadir)
    
     return
 
@@ -369,7 +369,8 @@ if __name__ == "__main__":
     parser.add_argument("--emax", action="store", dest="emax", default=30, required=False, help="Upper boundary on energy channels.")
     parser.add_argument("-s", "--seconds", action="store", dest="add_seconds", default=20, required=False, help="number of seconds to add before and after flare.")
     parser.add_argument("-r", "--resolution", action="store", dest="resolution", default=1.0, required=False, help="Time resolution of the output light curve.")
-   
+    parser.add_argument("-d", "--dir", action="store", dest="datadir", default="./", required=False, help="Directory with the data files.")
+ 
     clargs = parser.parse_args()
 
     filename = clargs.filename
@@ -377,5 +378,6 @@ if __name__ == "__main__":
     emax = np.float(clargs.emax)
     add_seconds = np.float(clargs.add_seconds)
     resolution = np.float(clargs.resolution)
+    datadir = clargs.datadir
 
-    write_all_lightcurves(filename, emin, emax, add_seconds, resolution)
+    write_all_lightcurves(filename, emin, emax, add_seconds, resolution, datadir)
